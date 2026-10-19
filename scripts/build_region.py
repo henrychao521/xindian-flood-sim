@@ -163,6 +163,8 @@ for g in gates_osm:
     if math.hypot(wi[k] - i, wj[k] - j) * D > cfg.get("gateSnap", 80):
         other_gates.append({"n": g["n"], "ref": g["ref"] or "疏散門", "x": g["x"], "y": g["y"]}); continue
     gi, gj = int(wi[k]), int(wj[k])
+    if any(g2["cell"] == [gi, gj] for g2 in gates):  # 兩座門吸附到同一格：只保留第一座
+        other_gates.append({"n": g["n"], "ref": g["ref"] or "疏散門", "x": g["x"], "y": g["y"]}); continue
     win = (slice(max(0, gj - 3), gj + 4), slice(max(0, gi - 3), gi + 4))
     zin = np.median(Z[win][inland[win]]) if inland[win].any() else Z[gj, gi]
     zout_cells = Z[win][(mask[win] == 0) & ~chan[win]]
