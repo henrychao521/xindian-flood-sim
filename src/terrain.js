@@ -313,7 +313,7 @@ function draw3DWater(tf) {
   for (let row = 0; row < H; row++) for (let c = 0; c < W; c++) {
     const v = row * W + c, k = idx(c, H - 1 - row), z = DEM.z[k], l = lvl[k];
     const wet = !isNaN(l);
-    pos.setY(v, wet ? l * s : (dispZ(z) - 0.4) * s);
+    pos.setY(v, wet ? (dispZ(z) + l - z) * s : (dispZ(z) - 0.4) * s);
     const base = DEM.mask[k] === 1 ? fl : rv, dpt = wet ? l - z : 0, f = 1 - Math.min(0.55, dpt / 4);
     col.setXYZ(v, base[0] / 255 * f, base[1] / 255 * f, base[2] / 255 * f);
   }

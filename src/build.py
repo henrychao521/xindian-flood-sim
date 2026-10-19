@@ -23,13 +23,15 @@ if region:
     lede = (f"{cfg['river']}沿岸（{cfg['districts']}）的洪水與疏散門失效淹水模擬。調整洪水規模、潮位、雨量與各疏散門狀態，"
             "看河道水位變化、哪座水門會先被河水漫過，以及堤內哪些地方、多少建物和道路會淹水。教學用的簡化模型。")
     terrain_hint = (f"地形取自內政部 2025 年 20 m DEM（臺北市分幅，TWD97 E {xa}–{xb}、N {ya}–{yb}，約 {(xb - xa) / 1000:.1f} × {(yb - ya) / 1000:.1f} km）。"
-                    "堤線沿河道邊緣自動建立，必要處依地形手動補描；堤頂高程以 DEM 與設定值取大。疏散門位置取自 OpenStreetMap。"
+                    "堤線沿河道邊緣自動建立，必要處依地形手動補描；堤頂高程以 DEM 與設定值取大。"
+                    + ("疏散門位置取自 OpenStreetMap。" if not summ.get("auto_gates") else "OpenStreetMap 未標註本區疏散門，水門位置依道路穿越堤線處推定，並非實際位置。")
+                    + 
                     f"堤內面積約 {summ['inland_km2']} km²；範圍邊界視為封閉。")
     notes = f'''      <section class="panel notes">
         <h2>模型假設與限制</h2>
         <ul>
           <li><b>河道水位是示意，不是水理演算。</b>各河段節點的常水位取自 DEM 的水面高程，計畫洪水位取堤頂下 1.5 m（出水高），洪水規模以「計畫洪峰流量的百分比」在兩者之間內插（水深約與流量的 0.6 次方成正比），再加上潮位影響。計畫洪峰流量取 {cfg['qDesign']:,} m³/s，只用來換算主流流速動畫。</li>
-          <li><b>疏散門：</b>{gates_txt}。底檻高程取門內外地面（20 m DEM）較高者，是推估值；門寬一律假設 {cfg.get('gateWidth', 8)} m。其他 OSM 疏散門（{'、'.join(summ['other_gates']) or '無'}）只標示位置。</li>
+          <li><b>疏散門：</b>{gates_txt}。{"其中 " + str(summ["auto_gates"]) + " 座是依道路穿越堤線處推定的位置（OSM 未標註），名稱取自道路名，不是官方門名。" if summ.get("auto_gates") else ""}底檻高程取門內外地面（20 m DEM）較高者，是推估值；門寬一律假設 {cfg.get('gateWidth', 8)} m。其他 OSM 疏散門（{'、'.join(summ['other_gates']) or '無'}）只標示位置。</li>
           <li><b>堤防：</b>20 m 網格通常看不到窄的防洪牆，所以堤線沿河道邊緣建立，堤頂高程設為 EL. {cfg.get('crest', 10)} m 或 DEM 較高值。高灘地與防洪牆的實際位置可能與模型差 20–40 m。</li>
           <li><b>水門流量係數依文獻修正。</b>Q = C·B·H<sup>1.5</sup>，C 取 1.45–1.70（C<sub>d</sub> 0.85–1.0 × 1.705，Henderson 1966；Bos 1985），預設 1.55。</li>
           <li><b>排水系統依臺北市設計標準建模。</b>雨水下水道收水上限 78.8 mm/hr；抽水站 45–60 mm/hr；外水位低於 EL. 2.5 m 時重力閘門可自然排水。範圍內抽水站：{'、'.join(summ['pumps']) or '無'}（臺北市資料大平臺），依最近抽水站劃分集水區。</li>

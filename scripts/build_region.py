@@ -32,6 +32,9 @@ Z[nodata] = 20.0  # 範圍外（無資料）視為高地，不參與計算
 # ---------------- 2. 河道、堤線、堤內 ----------------
 waterMax = cfg.get("waterMax", 1.0)
 low = (Z < waterMax) & ~nodata
+for poly in cfg.get("notChannel", []):  # 堤內的低窪地（例如洲美），不要誤判為河道
+    jj, ii = np.mgrid[0:ny, 0:nx]
+    low &= ~Path(np.array(poly)).contains_points(np.c_[ii.ravel(), jj.ravel()]).reshape(ny, nx)
 lab, n = ndimage.label(low)
 sz = ndimage.sum(low, lab, range(1, n + 1))
 chan = np.isin(lab, [k + 1 for k in range(n) if sz[k] >= cfg.get("minChannel", 150)])
@@ -145,7 +148,9 @@ pumps = []
 for r in csv.DictReader(open(ROOT / "data/raw/taipei_pump_stations.csv", encoding="utf-8-sig")):
     X, Y = float(r["X坐標"]), float(r["Y坐標"])
     if xa <= X <= xb and ya <= Y <= yb:
-        pumps.append({"n": r["站名"] + "抽水站", "x": round(X - xa, 1), "y": round(Y - ya, 1), "river": r["河系"]})
+        i, j = int((X - xa) // D), int((Y - ya) // D)
+        if not inland[max(0, j - 8):j + 9, max(0, i - 8):i + 9].any(): continue  # 堤外（例如社子島）的抽水站不服務本範圍堤內
+        pumps.append({"n": re.sub(r"\(.*?\)", "", r["站名"]).removesuffix("抽水站") + "抽水站", "x": round(X - xa, 1), "y": round(Y - ya, 1), "river": r["河系"]})
 
 # ---------------- 4. 疏散門：OSM 位置 → 最近堤線格；底檻取門內外地面較高者 ----------------
 wj, wi = np.where(wall)
@@ -169,6 +174,35 @@ for g in gates_osm:
 for g in cfg.get("extraGates", []):  # OSM 沒有標註的水門（依文獻或推定位置）
     i, j = g["cell"]; k = int(np.argmin((wi - i) ** 2 + (wj - j) ** 2)); gi, gj = int(wi[k]), int(wj[k])
     gates.append({"name": g["name"], "osm": "", "ref": g.get("note", "推定位置"), "cell": [gi, gj], "sill": g.get("sill", round(float(Z[gj, gi]), 2))})
+if cfg.get("autoGates"):  # OSM 沒有疏散門資料時：道路由堤內穿過堤線通往高灘地處，推定為疏散門
+    cand = []
+    for r in roads:
+        if r["c"] in ("motorway", "trunk", "motorway_link", "trunk_link"): continue
+        p = np.array(r["p"]) / D
+        seq = []
+        for a, b in zip(p[:-1], p[1:]):
+            for t in np.linspace(0, 1, max(2, int(np.hypot(*(b - a)) * 4))):
+                i, j = int(a[0] + (b[0] - a[0]) * t), int(a[1] + (b[1] - a[1]) * t)
+                if 0 <= i < nx and 0 <= j < ny and (not seq or seq[-1][:2] != (i, j)): seq.append((i, j, mask[j, i]))
+        for k in range(1, len(seq) - 1):
+            if seq[k][2] != 2: continue
+            back = [s[2] for s in seq[max(0, k - 4):k]]; fwd = [s[2] for s in seq[k + 1:k + 5]]
+            outs = [s for s in seq[k + 1:k + 5] + seq[max(0, k - 4):k] if s[2] == 0 and not chan[s[1], s[0]]]
+            if (1 in back and outs and 0 in fwd) or (1 in fwd and outs and 0 in back):
+                cand.append((seq[k][0], seq[k][1], r["n"] or "無名道路", r["c"]))
+    rank = {"primary": 0, "secondary": 1, "tertiary": 2}
+    cand.sort(key=lambda c: (rank.get(c[3], 3), c[2] == "無名道路"))
+    taken = [g["cell"] for g in gates]; n0 = len(taken)
+    for i, j, nm, _ in cand:
+        if len(taken) - n0 >= cfg["autoGates"]: break
+        if any(math.hypot(i - a, j - b) * D < cfg.get("autoGateSpacing", 600) for a, b in taken): continue
+        if any(Path(np.array(q)).contains_point((i, j)) for q in cfg.get("autoGateExclude", [])): continue
+        taken.append([i, j])
+        win = (slice(max(0, j - 3), j + 4), slice(max(0, i - 3), i + 4))
+        zin = np.median(Z[win][inland[win]]) if inland[win].any() else Z[j, i]
+        zo = Z[win][(mask[win] == 0) & ~chan[win]]
+        sill = round(float(max(zin, np.median(zo) if len(zo) else zin, pitFloor + 0.3)), 2)
+        gates.append({"name": f"{nm}門", "osm": "auto", "ref": "推定位置（道路穿越堤線處）", "cell": [i, j], "sill": sill})
 for g in gates: Zi[g["cell"][1], g["cell"][0]] = g["sill"]
 
 # ---------------- 5. 河段節點：常水位（DEM 水面）、計畫洪水位（堤頂 − 出水高）----------------
@@ -250,7 +284,7 @@ js = ("// 由 scripts/build_region.py 依 regions/%s.json 自動產生，請勿�
       + "const REGION = " + json.dumps(reg, ensure_ascii=False) + ";\n")
 (OUT / "region_data.js").write_text(js, encoding="utf-8")
 summary = {"grid": [nx, ny], "inland_km2": round(float(inland.sum()) * D * D / 1e6, 2), "wall_cells": int(wall.sum()), "gates": [(g["name"], g["cell"], g["sill"], nodes_out[g["node"]]["name"]) for g in gates],
-           "other_gates": [g["n"] for g in other_gates], "pumps": [p["n"] for p in pumps], "buildings": len(blds), "roads": len(roads), "bridges": len(bridges), "pubs": len(pubs),
+           "other_gates": [g["n"] for g in other_gates], "auto_gates": sum(g["osm"] == "auto" for g in gates), "pumps": [p["n"] for p in pumps], "buildings": len(blds), "roads": len(roads), "bridges": len(bridges), "pubs": len(pubs),
            "nodes": [(n["name"], n["km"], n["zn"], n["zd"], n["plain"]) for n in nodes_out], "pitFloor": round(float(pitFloor), 2), "low": dem["low"]}
 (OUT / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
 print(json.dumps(summary, ensure_ascii=False))
