@@ -36,7 +36,7 @@ function depthField(lvl) { const n = DEM.nx * DEM.ny, d = new Float32Array(n); f
 function roadStatus(d) { for (let c = 0; c < ROAD_STATUS.length; c++) if (d >= ROAD_STATUS[c].min) return c; return -1; }
 function infraStats(fr) {
   const dep = depthField(waterLevels(fr)), km = [0, 0, 0]; let total = 0;
-  ROAD_SEGS.forEach(s => { total += s.len; const c = roadStatus(dep[s.k]); if (c >= 0) km[c] += s.len / 1000; });
+  ROAD_SEGS.forEach(s => { if (DEM.mask[s.k] !== 1) return; /* 只統計堤內道路 */ total += s.len; const c = roadStatus(dep[s.k]); if (c >= 0) km[c] += s.len / 1000; });
   const pubs = PUBS.map(p => ({ ...p, depth: dep[p.k] })).sort((a, b) => b.depth - a.depth);
   return { km, total: total / 1000, pubs };
 }
@@ -132,7 +132,7 @@ function positionOSM3D() {
     const zg = Math.max(k1 >= 0 ? DEM.z[k1] : 0, k2 >= 0 ? DEM.z[k2] : 0, 8);
     m.position.y = (zg + 6 + 3 * (layer - 1)) * s;
   });
-  T3.pubs.children.forEach(m => { const p = m.userData, base = DEM.z[p.k] * s; m.scale.y = 6; m.position.y = base + 3; });
+  T3.pubs.children.forEach(m => { const p = m.userData, base = dispZ(DEM.z[p.k]) * s; m.scale.y = 6; m.position.y = base + 3; });
   T3.ogates.children.forEach(m => { const gt = m.userData, [lx, lz] = L(gt.x, gt.y); m.position.set(lx, 11.4 * s, lz); });
 }
 function colorOSM3D(lvl) {

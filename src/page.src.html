@@ -410,6 +410,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
 //@@DEMDATA@@
+//@@REGIONDATA@@
 //@@ENGINE@@
 
 // ---------------- 介面狀態 ----------------
@@ -426,7 +427,7 @@ let P = JSON.parse(JSON.stringify(PRESETS[0].p));
 let activePreset = "pdf";
 let frames = [];
 let tIdx = 48;
-let selGate = 2;
+let selGate = REGION.keyGate;
 let timer = null;
 
 const $ = id => document.getElementById(id);
@@ -654,14 +655,14 @@ function renderProfile(fr) {
 }
 
 function renderKPIs(fr) {
-  const m = fr.gates[2];
-  const peakM = Math.max(...frames.map(f => f.gates[2].zr));
+  const KG = REGION.keyGate, m = fr.gates[KG];
+  const peakM = Math.max(...frames.map(f => f.gates[KG].zr));
   const inflow = fr.gates.reduce((s, r) => s + Math.max(0, r.qGate + r.qOver), 0);
   let deep = 0, deepI = 0; fr.gates.forEach((r, i) => { if (r.depth > deep) { deep = r.depth; deepI = i; } });
   const fs = floodStats(fr);
   const overtop = fr.gates.some((r, i) => r.qOver > 0);
   $("kpis").innerHTML = `
-    <div class="kpi ${m.zr > GATES[2].sill ? "alert" : ""}"><span class="kpi-label">馬場町堤外水位</span><span class="kpi-value">${fmt(m.zr)}<small>m</small></span><span class="kpi-sub">峰值 ${fmt(peakM)} m・底檻 5.2 m</span></div>
+    <div class="kpi ${m.zr > GATES[KG].sill ? "alert" : ""}"><span class="kpi-label">${GATES[KG].name.replace(/門$/, "")}堤外水位</span><span class="kpi-value">${fmt(m.zr)}<small>m</small></span><span class="kpi-sub">峰值 ${fmt(peakM)} m・底檻 ${fmt(GATES[KG].sill, 1)} m</span></div>
     <div class="kpi ${inflow > 0.5 ? "alert" : ""}"><span class="kpi-label">河水灌入堤內</span><span class="kpi-value">${fmtInt(inflow)}<small>m³/s</small></span><span class="kpi-sub">${overtop ? "已有防洪牆越堤" : "全部經由未關閉水門"}</span></div>
     <div class="kpi ${fs.maxD >= 1 ? "alert" : ""}"><span class="kpi-label">堤內最深積水</span><span class="kpi-value">${FLOW.result ? fmt(fs.maxD) : "—"}<small>m</small></span><span class="kpi-sub">${FLOW.result ? "二維水流結果" : "二維計算中"}</span></div>
     <div class="kpi ${fs.total > 0 ? "alert" : ""}"><span class="kpi-label">堤內淹水面積</span><span class="kpi-value">${fmt(fs.total, 1)}<small>公頃</small></span><span class="kpi-sub">${fs.total > 0 ? `水深 ≥ 0.5 m：${fmt(fs.c2 + fs.c3, 1)} 公頃・受影響建物 ${fmtInt(buildingStats(fr).total)} 棟` : "依實測 DEM 計算"}</span></div>`;
@@ -674,7 +675,7 @@ function renderInfra(fr) {
     <div class="kpi ${cut > 0 ? "alert" : ""}"><span class="kpi-label">道路中斷（≥ 0.5 m）</span><span class="kpi-value">${fmt(cut, 1)}<small>km</small></span></div>
     <div class="kpi"><span class="kpi-label">危險路段（0.3–0.5 m）</span><span class="kpi-value">${fmt(risk, 1)}<small>km</small></span></div>
     <div class="kpi"><span class="kpi-label">積水路段（0.1–0.3 m）</span><span class="kpi-value">${fmt(wet, 1)}<small>km</small></span></div>
-    <div class="kpi"><span class="kpi-label">範圍內道路總長</span><span class="kpi-value">${fmt(st.total, 1)}<small>km</small></span></div>`;
+    <div class="kpi"><span class="kpi-label">堤內道路總長</span><span class="kpi-value">${fmt(st.total, 1)}<small>km</small></span></div>`;
   const LBL = ["中斷", "危險", "積水"], CLS = ["danger", "warn", "watch"];
   $("pubBody").innerHTML = st.pubs.map(p => { const c = roadStatus(p.depth); return `<tr><td><b>${p.n}</b></td><td>${p.label}</td><td class="r num">${p.depth > 0.005 ? fmt(p.depth) + " m" : "—"}</td><td><span class="pill ${c >= 0 ? CLS[c] : "ok"}">${c >= 0 ? LBL[c] : "無積水"}</span></td></tr>`; }).join("");
   $("infraWhen").textContent = `${hhmm(fr.t)}・${FLOW.result ? "二維水流結果" : "靜水面估算"}`;
@@ -710,7 +711,7 @@ function renderVillages(fr) {
 function render() {
   const fr = frames[tIdx];
   $("time").value = tIdx;
-  $("clock").textContent = `${hhmm(fr.t)}・${fmtInt(fr.Q)} m³/s・潮位 ${fmt(fr.tide, 1)} m`;
+  $("clock").textContent = `${hhmm(fr.t)}・${qLabel(fr.Q)}・潮位 ${fmt(fr.tide, 1)} m`;
   renderKPIs(fr); renderMap(fr); renderStageTS(); renderFlowTS(); renderProfile(fr); renderVillages(fr);
   renderContour(fr); update3D(fr); renderBuildingTable(fr); renderInfra(fr);
   const dr = fr.drain;
@@ -719,7 +720,7 @@ function render() {
     if (FLOW.result) { const s = FLOW.result.sew[Math.min(tIdx, FLOW.result.sew.length - 1)]; st = "・各站管網：" + DRAIN.stations.map((x, i) => `${x.n.replace("抽水站", "")} ${Math.round(s[i] * 100)}%`).join("、"); }
     $("drainInfo").innerHTML = `排水系統：重力閘門 <b>${dr.gravity ? "可自然排水" : "外水過高，關閉"}</b>・下水道管網 <b class="num">${Math.round(dr.fill * 100)}%</b> 滿・抽排 <b class="num">${fmtInt(dr.out)}</b> m³/s${st}`;
   }
-  const m = fr.gates[2];
+  const m = fr.gates[REGION.keyGate];
   $("terrainWhen").textContent = `${hhmm(fr.t)}・堤外 EL. ${fmt(m.zr)} m・堤內 EL. ${m.depth > 0.005 ? fmt(m.zin) : "—"} m`;
 }
 

@@ -126,7 +126,7 @@ function runFlow() {
     worker = new Worker(url);
   } catch (err) { FLOW.failed = true; return; }
   FLOW.worker = worker;
-  const gateIds = ["huajiang", "huazhong", "machangding", "guting", "jingfu"];
+  const gateIds = GATES.map(g => g.id);
   worker.onmessage = e => {
     if (token !== FLOW.token) return;
     if (e.data.type === "progress") { FLOW.progress = e.data.p; updateFlowStatus(); return; }
@@ -138,7 +138,7 @@ function runFlow() {
     simHours: SIM_HOURS, frameSec: FRAME_EVERY * DT, sewer: SEWER_DESIGN,
     rain: frames.map(f => f.rain), C: P.C, openPct: P.openPct, closeAt: P.closeAt,
     sewerMM: P.sewerMM, pumpMM: P.pumpMM, avail: P.avail, storeMM: SEWER_STORE_MM, gravityEL: GRAVITY_EL,
-    zrOut: frames.map(f => f.Z[2]), catch: DRAIN.catch, nCatch: DRAIN.stations.length,
+    zrOut: frames.map(f => f.Z[GATES[REGION.keyGate].node]), catch: DRAIN.catch, nCatch: DRAIN.stations.length,
     gates: gateIds.map((id, gi) => {
       const g = GATES[gi];
       return { entry: DEM.entry[id], sill: g.sill, width: g.width, levee: NODES[g.node].levee, open: !!P.gateOpen[id], zr: frames.map(f => f.Z[g.node]) };
@@ -152,7 +152,7 @@ function updateFlowStatus() {
   { const ov = $("calcOverlay"); if (ov) ov.hidden = true; }
   const fr = FLOW.result, k = Math.min(tIdx, fr.h.length - 1), q = fr.q[k];
   let vmax = 0; const u = fr.u[k], v = fr.v[k]; for (let i = 0; i < u.length; i++) { const s = Math.hypot(u[i], v[i]); if (s > vmax) vmax = s; }
-  const names = ["華江", "華中", "馬場町", "古亭", "景福"];
+  const names = GATES.map(g => g.name.replace(/門$/, ""));
   el.innerHTML = `二維水流：水門入流 ${q.map((v, i) => `${names[i]} <b class="num">${fmt(v, 0)}</b>`).join("・")} m³/s・堤內最大流速 <b class="num">${fmt(vmax, 1)}</b> m/s`;
 }
 // 堤內各格水深：二維結果優先，未完成時用靜水面
@@ -209,7 +209,11 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) star
 const RIVER = (() => {
   const n = DEM.nx * DEM.ny, ch = new Uint8Array(n), dist = new Float32Array(n).fill(Infinity), q = [];
   for (let k = 0; k < n; k++) if (DEM.mask[k] === 0 && DEM.z[k] < 1.0) ch[k] = 1;
-  for (let j = 0; j < DEM.ny; j++) { const k = idx(0, j); if (ch[k]) { dist[k] = 0; q.push(k); } }  // 下游出口在西側邊界
+  const edge = REGION.outlet || "W", push0 = k => { if (ch[k] && dist[k] !== 0) { dist[k] = 0; q.push(k); } };  // 下游出口所在邊界
+  if (edge.includes("W")) for (let j = 0; j < DEM.ny; j++) push0(idx(0, j));
+  if (edge.includes("E")) for (let j = 0; j < DEM.ny; j++) push0(idx(DEM.nx - 1, j));
+  if (edge.includes("S")) for (let i = 0; i < DEM.nx; i++) push0(idx(i, 0));
+  if (edge.includes("N")) for (let i = 0; i < DEM.nx; i++) push0(idx(i, DEM.ny - 1));
   for (let h = 0; h < q.length; h++) {
     const k = q[h], i = k % DEM.nx, j = (k / DEM.nx) | 0;
     for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -257,7 +261,7 @@ function animate3D(ts) {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const dtA = reduce ? 0 : Math.min(0.05, (ts - (P3.last || ts)) / 1000); P3.last = ts;
   const k0 = Math.min(Math.floor(playing), frames.length - 1), fr = frames[k0];
-  const zr = fr.gates[2].zr, Q = fr.Q, vRiver = Q / (300 * Math.max(2, zr + 3));
+  const zr = fr.gates[REGION.keyGate].zr, Q = qAbs(fr), vRiver = Q / ((REGION.riverWidth || 300) * Math.max(2, zr + 3 - (REGION.bedRef || 0)));
   const R = FLOW.result, L = R ? R.h.length - 1 : 0;
   const hh = R ? R.h[Math.min(k0, L)] : null, u = R ? R.u[Math.min(k0, L)] : null, v = R ? R.v[Math.min(k0, L)] : null;
   const pos = P3.lines.geometry.attributes.position, col = P3.lines.geometry.attributes.color, s = T3.ex / DEM.d, lvl = T3.lvl;

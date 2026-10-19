@@ -1,3 +1,4 @@
 *.osm
 vendor/
 __pycache__/
+work/

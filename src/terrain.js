@@ -10,7 +10,7 @@ const DEM = (() => {
   }
   return { nx: DEM_DATA.nx, ny: DEM_DATA.ny, x0: DEM_DATA.x0, y0: DEM_DATA.y0, d: DEM_DATA.d, z, mask };
 })();
-const DEM_GATES = { huajiang: "華江門", huazhong: "華中門", machangding: "馬場町門", guting: "古亭門", jingfu: "景福門" };
+const DEM_GATES = Object.fromEntries(GATES.map(g => [g.id, g.name]));
 const idx = (i, j) => j * DEM.nx + i;
 // 每座水門的堤內入口格與最低窪處，作為積水擴散起點
 DEM.entry = {};
@@ -77,10 +77,21 @@ function inlandWet(level) {
   };
 })();
 
+// 堤外水位：河段節點有格點座標時取最近節點的水位，否則整段用主要水門處的水位
+const NEAR_NODE = (() => {
+  if (!NODES.every(n => n.cell)) return null;
+  const a = new Int8Array(DEM.nx * DEM.ny);
+  for (let k = 0; k < a.length; k++) {
+    const i = k % DEM.nx, j = (k / DEM.nx) | 0; let b = 0, bd = 1e18;
+    NODES.forEach((n, m) => { const d = (n.cell[0] - i) ** 2 + (n.cell[1] - j) ** 2; if (d < bd) { bd = d; b = m; } }); a[k] = b;
+  }
+  return a;
+})();
+function outsideStage(Z, k) { return NEAR_NODE ? Z[NEAR_NODE[k]] : Z[GATES[REGION.keyGate].node]; }
 function waterLevels(fr) {
-  const n = DEM.nx * DEM.ny, lvl = new Float32Array(n).fill(NaN), zr = fr.gates[2].zr, dep = inlandDepth(fr);
+  const n = DEM.nx * DEM.ny, lvl = new Float32Array(n).fill(NaN), dep = inlandDepth(fr);
   for (let k = 0; k < n; k++) {
-    if (DEM.mask[k] === 0 && DEM.z[k] < zr) lvl[k] = zr;
+    if (DEM.mask[k] === 0) { const zr = outsideStage(fr.Z, k); if (DEM.z[k] < zr) lvl[k] = zr; }
     else if (DEM.mask[k] === 1 && dep[k] > 0.02) lvl[k] = DEM.z[k] + dep[k];
   }
   return lvl;
@@ -153,6 +164,10 @@ function tag(g, x, y, s, align = "center") {
 }
 function renderContour(fr) {
   const cv = $("contour"); if (!cv) return;
+  if (cv.width !== DEM.nx * CT.scale) { // 依範圍大小調整畫布
+    cv.width = DEM.nx * CT.scale; cv.height = DEM.ny * CT.scale;
+    const fl = $("flowLayer"); if (fl) { fl.width = cv.width; fl.height = cv.height; }
+  }
   if (!contourBase) buildContourBase();
   const g = cv.getContext("2d"), W = cv.width, H = cv.height;
   g.clearRect(0, 0, W, H); g.drawImage(contourBase, 0, 0);
@@ -170,12 +185,10 @@ function renderContour(fr) {
   }
   wctx.putImageData(wimg, 0, 0);
   g.imageSmoothingEnabled = false; g.drawImage(wc, 0, 0, W, H);
-  [[55, 160, "萬華區"], [170, 150, "中正區"], [235, 120, "大安區（公館）"], [105, 105, "青年公園"]].forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
+  REGION.labels.forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
   drawBuildingsOnMap(g, fr);
   drawOSMOnMap(g, waterLevels(fr));
-  { const [px, py] = cellToCanvas(120, 70); tag(g, px, py, "新店溪"); }
-  { const [px, py] = cellToCanvas(30, 185); tag(g, px, py, "華江高灘地（堤外）"); }
-  { const [px, py] = cellToCanvas(110, 25); tag(g, px, py, "永和（新北，不在模擬範圍）"); }
+  (REGION.mapLabels || []).forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
   const [lx, ly] = cellToCanvas(DEM_DATA.low[0], DEM_DATA.low[1]);
   g.strokeStyle = "#1a1a1a"; g.lineWidth = 2; g.beginPath(); g.arc(lx, ly, 7, 0, Math.PI * 2); g.stroke();
   tag(g, lx + 12, ly + 4, `堤內最低窪處 EL. ${fmt(BASINS.wanhua.zb)} m`, "left");
@@ -210,7 +223,7 @@ function bindContourHover() {
 
 // ---- 3D 立體 ----
 const T3 = { ok: false, ex: 12 };
-const CAM0 = [-150, 175, 200];
+const CAM0 = REGION.cam;
 function init3D() {
   const host = $("view3d");
   if (!window.THREE || !THREE.OrbitControls) { host.innerHTML = '<p class="hint" style="padding:16px">3D 函式庫沒有載入，請重新整理頁面。</p>'; return; }
@@ -250,7 +263,7 @@ function init3D() {
       s.scale.set(22, 4.4, 1); s.userData = { i, j, zEl }; scene.add(s); labels.push(s);
     };
     Object.entries(DEM_DATA.gates).forEach(([id, [gi, gj]]) => label(DEM_GATES[id], gi, gj, 15));
-    label("萬華區", 55, 160, 14); label("中正區", 170, 150, 16); label("公館", 235, 120, 20); label("青年公園", 105, 105, 8); label("新店溪", 120, 70, 6); label("堤內最低窪處", DEM_DATA.low[0], DEM_DATA.low[1], 8);
+    REGION.labels.forEach(([i, j, s, z]) => label(s, i, j, z || 10)); label("堤內最低窪處", DEM_DATA.low[0], DEM_DATA.low[1], 8);
     Object.assign(T3, { ok: true, renderer, scene, camera, controls, terrain, water, gates, labels, host });
     buildBuildings3D(scene);
     T3.addLabel = label; buildOSM3D(scene);
@@ -265,10 +278,12 @@ function init3D() {
   }
 }
 const toLocal = (i, j) => [i - DEM.nx / 2 + 0.5, -(j - DEM.ny / 2 + 0.5)];
+// 3D 顯示用高程：15 m 以上的山丘壓縮成 1/10，避免垂直誇張後變成尖塔
+function dispZ(z) { return z > 15 ? 15 + (z - 15) * 0.1 : z; }
 function applyHeights() {
   if (!T3.ok) return;
   const pos = T3.terrain.geometry.attributes.position, W = DEM.nx, H = DEM.ny, s = T3.ex / DEM.d;
-  for (let row = 0; row < H; row++) for (let col = 0; col < W; col++) pos.setY(row * W + col, DEM.z[idx(col, H - 1 - row)] * s);
+  for (let row = 0; row < H; row++) for (let col = 0; col < W; col++) pos.setY(row * W + col, dispZ(DEM.z[idx(col, H - 1 - row)]) * s);
   pos.needsUpdate = true; T3.terrain.geometry.computeVertexNormals();
   T3.labels.forEach(l => { const [lx, lz] = toLocal(l.userData.i, l.userData.j); l.position.set(lx, l.userData.zEl * s, lz); });
   Object.entries(DEM_DATA.gates).forEach(([id, [gi, gj]]) => { const [x, z] = toLocal(gi, gj); T3.gates[id].position.set(x, 11.8 * s, z); });
@@ -280,13 +295,13 @@ function update3D(fr) { T3.dirty = true; if (T3.ok) Object.keys(T3.gates).forEac
 // 依連續時間 tf（以 5 分鐘為 1 格）內插水面
 function waterAt(tf) {
   const n = DEM.nx * DEM.ny, i0 = Math.max(0, Math.min(frames.length - 1, Math.floor(tf))), i1 = Math.min(frames.length - 1, i0 + 1), w = Math.min(1, tf - i0);
-  const zr = frames[i0].gates[2].zr * (1 - w) + frames[i1].gates[2].zr * w;
+  const Zi = frames[i0].Z.map((z, n) => z * (1 - w) + frames[i1].Z[n] * w), zr = Zi[GATES[REGION.keyGate].node];
   const lvl = new Float32Array(n).fill(NaN);
   let hA = null, hB = null;
   if (FLOW.result) { const L = FLOW.result.h.length - 1; hA = FLOW.result.h[Math.min(i0, L)]; hB = FLOW.result.h[Math.min(i1, L)]; }
   const dep = hA ? null : inlandDepth(frames[i0]);
   for (let k = 0; k < n; k++) {
-    if (DEM.mask[k] === 0) { if (DEM.z[k] < zr) lvl[k] = zr; }
+    if (DEM.mask[k] === 0) { const zo = outsideStage(Zi, k); if (DEM.z[k] < zo) lvl[k] = zo; }
     else if (DEM.mask[k] === 1) { const d = hA ? hA[k] * (1 - w) + hB[k] * w : dep[k]; if (d > 0.02) lvl[k] = DEM.z[k] + d; }
   }
   return { lvl, zr, w, i0, i1 };
@@ -298,7 +313,7 @@ function draw3DWater(tf) {
   for (let row = 0; row < H; row++) for (let c = 0; c < W; c++) {
     const v = row * W + c, k = idx(c, H - 1 - row), z = DEM.z[k], l = lvl[k];
     const wet = !isNaN(l);
-    pos.setY(v, wet ? l * s : (z - 0.4) * s);
+    pos.setY(v, wet ? l * s : (dispZ(z) - 0.4) * s);
     const base = DEM.mask[k] === 1 ? fl : rv, dpt = wet ? l - z : 0, f = 1 - Math.min(0.55, dpt / 4);
     col.setXYZ(v, base[0] / 255 * f, base[1] / 255 * f, base[2] / 255 * f);
   }
@@ -346,7 +361,7 @@ function positionBuildings3D() {
   const pos = T3.bld.geometry.attributes.position.array, s = T3.ex / DEM.d;
   const L = (x, y) => [x / DEM.d - DEM.nx / 2, -(y / DEM.d - DEM.ny / 2)];
   BUILDINGS.forEach(b => {
-    const base = DEM.z[b.cell] * s - 0.05, top = DEM.z[b.cell] * s + b.h * BLD_SCALE;
+    const base = dispZ(DEM.z[b.cell]) * s - 0.05, top = dispZ(DEM.z[b.cell]) * s + b.h * BLD_SCALE;
     let o = b.v0 * 3; const n = b.pts.length;
     const put = (x, y, h) => { const [lx, lz] = L(x, y); pos[o++] = lx; pos[o++] = h; pos[o++] = lz; };
     for (let i = 0; i < n; i++) {
