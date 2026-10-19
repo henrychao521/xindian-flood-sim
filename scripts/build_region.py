@@ -134,12 +134,7 @@ import heapq
 fillAbove = cfg.get("fillAbove", max(pitFloor + 8, float(Zb[wall].max()) + 1 if wall.any() else crest + 1))
 done = ~inland.copy(); F = Zi.copy(); hq = []
 for j, i in zip(*np.where(inland & ndimage.binary_dilation(~inland))): hq.append((F[j, i], j, i)); done[j, i] = True
-for j in (0, ny - 1):
-    for i in range(nx):
-        if inland[j, i] and not done[j, i]: hq.append((F[j, i], j, i)); done[j, i] = True
-for i in (0, nx - 1):
-    for j in range(ny):
-        if inland[j, i] and not done[j, i]: hq.append((F[j, i], j, i)); done[j, i] = True
+# 範圍邊界是封閉的（模型不讓水流出去），所以邊界不當出口：山坡流到邊界積成的假水池也一併填平
 heapq.heapify(hq)
 while hq:
     h, j, i = heapq.heappop(hq)
