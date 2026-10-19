@@ -131,9 +131,9 @@ Zi[inland] = np.maximum(Zi[inland], pitFloor)
 # 山坡上的小窪地多半是 20 m DEM 的誤差，下雨時會積出數公尺深的假水池：
 # 以 priority-flood 填平，只處理比堤頂還高的格子（堤內平地的低窪處保留）
 import heapq
-fillAbove = cfg.get("fillAbove", max(pitFloor + 8, float(Zb[wall].max()) + 1 if wall.any() else crest + 1))
+fillAbove = cfg.get("fillAbove", max(pitFloor + 8, max([crest] + [nd.get("crest", crest) for nd in cfg["nodes"]]) + 1))  # 設定的堤頂（不是堤線格最高點：堤線可能經過山坡）
 done = ~inland.copy(); F = Zi.copy(); hq = []
-for j, i in zip(*np.where(inland & ndimage.binary_dilation(~inland))): hq.append((F[j, i], j, i)); done[j, i] = True
+for j, i in zip(*np.where(~inland & ndimage.binary_dilation(inland))): hq.append((F[j, i], j, i))  # 出口是堤線與堤外格（以堤頂高程計）
 # 範圍邊界是封閉的（模型不讓水流出去），所以邊界不當出口：山坡流到邊界積成的假水池也一併填平
 heapq.heapify(hq)
 while hq:
