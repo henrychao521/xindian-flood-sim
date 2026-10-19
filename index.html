@@ -58,6 +58,7 @@ body {
 .wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 18px; }
 header { display: grid; gap: 6px; }
 .eyebrow { font-size: 12px; letter-spacing: .08em; color: var(--muted); }
+.navlink { color: var(--accent); text-decoration: none; } .navlink:hover { text-decoration: underline; }
 h1 { font-family: var(--font-display); font-size: clamp(24px, 3.4vw, 34px); margin: 0; text-wrap: balance; line-height: 1.25; }
 h2 { font-size: 15px; margin: 0; font-weight: 700; }
 .lede { margin: 0; color: var(--muted); max-width: 70ch; }
@@ -171,7 +172,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">TWVD 2001 高程（EL. m）・模擬時長 8 小時</div>
+    <div class="eyebrow"><a class="navlink" href="overview/">← 全市河川總覽</a>・TWVD 2001 高程（EL. m）・模擬時長 8 小時</div>
     <h1>新店溪洩洪淹水模擬器</h1>
     <p class="lede">調整上游洩洪、淡水河口潮位、市區雨量與各疏散門狀態，看河道水位怎麼變化、哪個水門會先被河水漫過，以及萬華、中正、大安堤內哪些地方、多少建物會淹水。數值依據你提供的 PDF（新店溪洩洪與淹水模擬系統設計）整理，屬於教學用的簡化模型。</p>
   </header>

@@ -136,6 +136,7 @@
   ]
  ],
  "pitFloor": -0.05,
+ "hill_pits_filled": 320,
  "low": [
   272,
   3

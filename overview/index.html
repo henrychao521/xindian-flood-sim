@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="臺北市各河段洩洪、潮位、降雨與疏散門失效的互動淹水模擬總覽。教學用簡化模型。">
+<title>臺北市河川淹水模擬</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<style>
+:root {
+  --bg: #eef3f6; --surface: #ffffff; --ink: #12212b; --muted: #566875; --line: #d3dde4;
+  --accent: #0e6a86; --accent-soft: #dcecf2;
+  --font-display: "Noto Serif TC", "Songti TC", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0c151c; --surface: #13202a; --ink: #e2ebf1; --muted: #8fa2b0; --line: #243540; --accent: #45b8d6; --accent-soft: #173444; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0c151c; --surface: #13202a; --ink: #e2ebf1; --muted: #8fa2b0; --line: #243540; --accent: #45b8d6; --accent-soft: #173444; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.55; }
+main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 48px; display: grid; gap: 20px; }
+h1 { font-family: var(--font-display); font-size: clamp(24px, 3.4vw, 34px); margin: 0; line-height: 1.25; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+.map { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.map img { display: block; width: 100%; height: auto; }
+.box { position: absolute; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 3px; text-decoration: none; }
+.box:hover, .box:focus-visible { background: color-mix(in srgb, var(--accent) 30%, transparent); outline: none; }
+.box span { position: absolute; left: 3px; top: 2px; font-size: 11px; font-weight: 700; color: #0b2430; background: rgba(255,255,255,.85); padding: 0 4px; border-radius: 3px; white-space: nowrap; }
+.cards { display: grid; gap: 10px; }
+.card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: inherit; text-decoration: none; }
+.card:hover, .card:focus-visible { border-color: var(--accent); outline: none; }
+.card h2 { font-size: 15px; margin: 0; color: var(--accent); }
+.card p { margin: 2px 0 6px; color: var(--muted); font-size: 13px; }
+dl { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; }
+dl div { display: flex; gap: 6px; align-items: baseline; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-size: 13px; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.notes { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; color: var(--muted); font-size: 13px; }
+.notes ul { margin: 6px 0 0; padding-left: 20px; }
+footer { color: var(--muted); font-size: 12px; }
+footer a, .notes a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>臺北市河川淹水模擬</h1>
+    <p class="lede">從新店溪出發，沿淡水河、基隆河、景美溪把臺北市主要河段都做成互動模擬：調整洪水規模、潮位、雨量與疏散門狀態，看哪座水門先被漫過、堤內哪裡會淹。點地圖上的框或右側卡片進入各河段。</p>
+  </header>
+  <div class="layout">
+    <div class="map">
+      <img src="map.jpg" width="889" height="1070" alt="臺北市 20 m 地形暈渲圖，標出各河段模擬範圍">
+      <a class="box" href="../" style="left:21.18%;top:65.73%;width:22.05%;height:13.73%" aria-label="新店溪（萬華・中正・大安）"><span>新店溪</span></a>
+      <a class="box" href="../tamsui/" style="left:21.18%;top:47.42%;width:18.9%;height:20.27%" aria-label="淡水河東岸"><span>淡水河東岸</span></a>
+      <a class="box" href="../shilin/" style="left:17.24%;top:34.99%;width:23.62%;height:18.31%" aria-label="基隆河下游（社子・士林）"><span>基隆河下游</span></a>
+      <a class="box" href="../zhongshan/" style="left:36.93%;top:44.8%;width:25.98%;height:17.66%" aria-label="基隆河中游（中山・松山・大直）"><span>基隆河中游</span></a>
+      <a class="box" href="../neihu/" style="left:60.55%;top:50.69%;width:20.47%;height:17.0%" aria-label="基隆河上游（內湖・南港）"><span>基隆河上游</span></a>
+      <a class="box" href="../jingmei/" style="left:35.35%;top:75.54%;width:30.71%;height:16.35%" aria-label="景美溪（文山）"><span>景美溪</span></a>
+      <a class="box" href="../beitou/" style="left:7.8%;top:23.22%;width:23.62%;height:17.0%" aria-label="基隆河出海段（北投・關渡）"><span>基隆河出海段</span></a>
+    </div>
+    <div class="cards">
+      <a class="card" href="../">
+        <h2>新店溪（萬華・中正・大安）</h2>
+        <p>萬華、中正、大安・新店溪</p>
+        <dl><div><dt>特色</dt><dd>本專案起點：颱風預報換算、五座疏散門、示範影片</dd></div></dl>
+      </a>
+      <a class="card" href="../tamsui/">
+        <h2>淡水河東岸</h2>
+        <p>萬華北、大同、中山西・淡水河、基隆河下游</p>
+        <dl><div><dt>堤內面積</dt><dd class="num">11.93 km²</dd></div><div><dt>疏散門</dt><dd class="num">5</dd></div><div><dt>抽水站</dt><dd class="num">13</dd></div></dl>
+      </a>
+      <a class="card" href="../shilin/">
+        <h2>基隆河下游（社子・士林）</h2>
+        <p>士林、社子・基隆河下游、雙溪</p>
+        <dl><div><dt>堤內面積</dt><dd class="num">20.4 km²</dd></div><div><dt>疏散門</dt><dd class="num">6</dd></div><div><dt>抽水站</dt><dd class="num">22</dd></div></dl>
+      </a>
+      <a class="card" href="../zhongshan/">
+        <h2>基隆河中游（中山・松山・大直）</h2>
+        <p>中山、松山、大直、內湖西・基隆河中游</p>
+        <dl><div><dt>堤內面積</dt><dd class="num">33.11 km²</dd></div><div><dt>疏散門</dt><dd class="num">8</dd></div><div><dt>抽水站</dt><dd class="num">22</dd></div></dl>
+      </a>
+      <a class="card" href="../neihu/">
+        <h2>基隆河上游（內湖・南港）</h2>
+        <p>內湖、南港・基隆河上游</p>
+        <dl><div><dt>堤內面積</dt><dd class="num">24.81 km²</dd></div><div><dt>疏散門</dt><dd class="num">8</dd></div><div><dt>抽水站</dt><dd class="num">14</dd></div></dl>
+      </a>
+      <a class="card" href="../jingmei/">
+        <h2>景美溪（文山）</h2>
+        <p>文山（景美、木柵）・景美溪</p>
+        <dl><div><dt>堤內面積</dt><dd class="num">35.53 km²</dd></div><div><dt>疏散門</dt><dd class="num">3</dd></div><div><dt>抽水站</dt><dd class="num">11</dd></div></dl>
+      </a>
+      <a class="card" href="../beitou/">
+        <h2>基隆河出海段（北投・關渡）</h2>
+        <p>北投、關渡、士林北・基隆河出海段、磺溪</p>
+        <dl><div><dt>堤內面積</dt><dd class="num">26.87 km²</dd></div><div><dt>疏散門</dt><dd class="num">2</dd></div><div><dt>抽水站</dt><dd class="num">5</dd></div></dl>
+      </a>
+    </div>
+  </div>
+  <section class="notes">
+    <b>共同的模型設定</b>
+    <ul>
+      <li>地形：內政部 2025 年 20 m DEM；堤線沿河道邊緣自動建立，必要處依地形與 OpenStreetMap 手動補描。</li>
+      <li>河道水位以「計畫洪峰流量的百分比」在常水位與計畫洪水位之間內插，屬示意，不是水理演算。</li>
+      <li>疏散門位置取自 OpenStreetMap；士林・社子與北投・關渡的 OSM 沒有疏散門資料，改依道路穿越堤線處推定。</li>
+      <li>堤內淹水以二維局部慣性淺水波法計算，排水系統依臺北市雨水下水道與抽水站設計標準。</li>
+      <li>各河段範圍邊界視為封閉，相鄰河段之間的水不互通。</li>
+    </ul>
+  </section>
+  <footer>
+    教學與情境比較用的簡化模擬，不是官方淹水預報或疏散指示。
+    資料：內政部國土測繪中心 20 m DEM（政府資料開放授權條款第 1 版）、臺北市 3D 近似建物模型（經 <a href="https://github.com/sheethub/tpe3d">sheethub/tpe3d</a> 轉換）、臺北市抽水站、© OpenStreetMap contributors（ODbL）。
+    原始碼：<a href="https://github.com/henrychao521/xindian-flood-sim">github.com/henrychao521/xindian-flood-sim</a>
+  </footer>
+</main>
+</body>
+</html>

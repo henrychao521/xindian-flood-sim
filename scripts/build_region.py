@@ -26,6 +26,7 @@ TO_TM = Transformer.from_crs("EPSG:4326", "EPSG:3826", always_xy=True)
 d = np.load(ROOT / "work/taipei_dem20.npz"); G = d["G"]; X0, Y0 = float(d["x0"]), float(d["y0"])
 Z = G[int((ya - Y0) // D):int((yb - Y0) // D), int((xa - X0) // D):int((xb - X0) // D)].astype(np.float64)
 ny, nx = Z.shape
+Z[Z < -20] = np.nan  # DEM 少數異常值（例如 −327 m）
 nodata = np.isnan(Z)
 Z[nodata] = 20.0  # 範圍外（無資料）視為高地，不參與計算
 
@@ -127,6 +128,28 @@ else:
 Zi = Zb.copy()
 pitFloor = cfg.get("pitFloor", float(np.percentile(Z[inland], 0.5)))
 Zi[inland] = np.maximum(Zi[inland], pitFloor)
+# 山坡上的小窪地多半是 20 m DEM 的誤差，下雨時會積出數公尺深的假水池：
+# 以 priority-flood 填平，只處理比堤頂還高的格子（堤內平地的低窪處保留）
+import heapq
+fillAbove = cfg.get("fillAbove", max(pitFloor + 8, float(Zb[wall].max()) + 1 if wall.any() else crest + 1))
+done = ~inland.copy(); F = Zi.copy(); hq = []
+for j, i in zip(*np.where(inland & ndimage.binary_dilation(~inland))): hq.append((F[j, i], j, i)); done[j, i] = True
+for j in (0, ny - 1):
+    for i in range(nx):
+        if inland[j, i] and not done[j, i]: hq.append((F[j, i], j, i)); done[j, i] = True
+for i in (0, nx - 1):
+    for j in range(ny):
+        if inland[j, i] and not done[j, i]: hq.append((F[j, i], j, i)); done[j, i] = True
+heapq.heapify(hq)
+while hq:
+    h, j, i = heapq.heappop(hq)
+    for dj, di in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        jj, ii = j + dj, i + di
+        if 0 <= jj < ny and 0 <= ii < nx and not done[jj, ii]:
+            done[jj, ii] = True; F[jj, ii] = max(F[jj, ii], h); heapq.heappush(hq, (F[jj, ii], jj, ii))
+hill = inland & (Zi > fillAbove)
+filled_cells = int((F[hill] > Zi[hill] + 0.01).sum())
+Zi[hill] = F[hill]
 
 # ---------------- 3b. 道路、公共設施、抽水站（抽水站需用到堤內範圍）----------------
 HW = {"motorway", "trunk", "primary", "secondary", "tertiary", "residential", "unclassified", "living_street", "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"}
@@ -285,7 +308,7 @@ low_c = np.unravel_index(np.argmin(np.where(er if er.any() else inland, Zm, 99))
 
 # ---------------- 8. 輸出 ----------------
 dem = {"nx": nx, "ny": ny, "x0": xa, "y0": ya, "d": D,
-       "z": base64.b64encode(np.round(Zi * 100).astype("<i2").tobytes()).decode(),
+       "z": base64.b64encode(np.round(np.clip(Zi, -300, 320) * 100).astype("<i2").tobytes()).decode(),  # int16 公分：超過 327 m 會溢位，高山一律截到 320 m
        "mask": base64.b64encode(mask.tobytes()).decode(),
        "gates": {f"g{k}": g["cell"] for k, g in enumerate(gates)}, "low": [int(low_c[1]), int(low_c[0])]}
 (OUT / "dem.json").write_text(json.dumps(dem, separators=(",", ":")))
@@ -307,7 +330,7 @@ js = ("// 由 scripts/build_region.py 依 regions/%s.json 自動產生，請勿�
 (OUT / "region_data.js").write_text(js, encoding="utf-8")
 summary = {"grid": [nx, ny], "inland_km2": round(float(inland.sum()) * D * D / 1e6, 2), "wall_cells": int(wall.sum()), "gates": [(g["name"], g["cell"], g["sill"], nodes_out[g["node"]]["name"]) for g in gates],
            "other_gates": [g["n"] for g in other_gates], "auto_gates": sum(g["osm"] == "auto" for g in gates), "pumps": [p["n"] for p in pumps], "buildings": len(blds), "roads": len(roads), "bridges": len(bridges), "pubs": len(pubs),
-           "nodes": [(n["name"], n["km"], n["zn"], n["zd"], n["plain"]) for n in nodes_out], "pitFloor": round(float(pitFloor), 2), "low": dem["low"]}
+           "nodes": [(n["name"], n["km"], n["zn"], n["zd"], n["plain"]) for n in nodes_out], "pitFloor": round(float(pitFloor), 2), "hill_pits_filled": filled_cells, "low": dem["low"]}
 (OUT / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
 print(json.dumps(summary, ensure_ascii=False))
 
