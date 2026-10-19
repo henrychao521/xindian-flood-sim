@@ -1,0 +1,3 @@
+*.osm
+vendor/
+__pycache__/

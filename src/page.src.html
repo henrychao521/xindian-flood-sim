@@ -1,0 +1,779 @@
+<title>新店溪洩洪淹水模擬器</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700&display=swap">
+<style>
+/* 版面：左側操作欄＋右側「平面示意圖 → 縱斷面 → 時序 → 各里統計」由總覽到細節 */
+:root {
+  --bg: #eef3f6;
+  --surface: #ffffff;
+  --ink: #12212b;
+  --muted: #566875;
+  --line: #d3dde4;
+  --river: #2b7bb5;
+  --flood: #1b4f9c;
+  --land: #e2e9ee;
+  --ground: #c9b89a;
+  --accent: #0e6a86;
+  --accent-soft: #dcecf2;
+  --danger: #bf3b2b;
+  --warn: #b97c0d;
+  --watch: #c3a516;
+  --ok: #2c8556;
+  --flood-map: #123f9e;
+  --font-display: "Noto Serif TC", "Songti TC", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c151c; --surface: #13202a; --ink: #e2ebf1; --muted: #8fa2b0; --line: #243540;
+    --river: #4aa0da; --flood: #6fb2ff; --land: #1a2a35; --ground: #6e6150;
+    --accent: #45b8d6; --accent-soft: #173444;
+    --danger: #ef6a58; --warn: #e3a43a; --watch: #d9c24a; --ok: #4fbf84;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c151c; --surface: #13202a; --ink: #e2ebf1; --muted: #8fa2b0; --line: #243540;
+  --river: #4aa0da; --flood: #6fb2ff; --land: #1a2a35; --ground: #6e6150;
+  --accent: #45b8d6; --accent-soft: #173444;
+  --danger: #ef6a58; --warn: #e3a43a; --watch: #d9c24a; --ok: #4fbf84;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.55;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 18px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; color: var(--muted); }
+h1 { font-family: var(--font-display); font-size: clamp(24px, 3.4vw, 34px); margin: 0; text-wrap: balance; line-height: 1.25; }
+h2 { font-size: 15px; margin: 0; font-weight: 700; }
+.lede { margin: 0; color: var(--muted); max-width: 70ch; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.preset {
+  font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.preset:hover { border-color: var(--accent); }
+.preset[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.preset:focus-visible, button:focus-visible, input:focus-visible, .gate-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.controls { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 900px) { .controls { position: static; } }
+.group { display: grid; gap: 10px; }
+.group + .group { border-top: 1px solid var(--line); padding-top: 14px; }
+.group-title { font-size: 12px; letter-spacing: .06em; color: var(--muted); font-weight: 500; }
+.ctl { display: grid; gap: 4px; }
+.ctl-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.ctl-head output { font-family: var(--font-data); font-weight: 500; white-space: nowrap; }
+.hint { font-size: 12px; color: var(--muted); }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.gate-list { display: grid; gap: 6px; }
+.gate-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); }
+.gate-row small { color: var(--muted); display: block; font-size: 11.5px; }
+.gate-row.failed { border-color: var(--danger); }
+.switch { font: inherit; font-size: 12px; border-radius: 6px; padding: 3px 10px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ok); white-space: nowrap; }
+.gate-row.failed .switch { background: var(--danger); border-color: var(--danger); color: var(--surface); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; padding: 6px 4px; border: 0; background: var(--surface); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+
+.main { display: grid; gap: 18px; min-width: 0; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.kpi-label { font-size: 12px; color: var(--muted); }
+.kpi-value { font-family: var(--font-data); font-size: 24px; font-weight: 500; line-height: 1.2; }
+.kpi-value small { font-size: 13px; color: var(--muted); margin-left: 3px; }
+.kpi-sub { font-size: 12px; color: var(--muted); }
+.kpi.alert .kpi-value { color: var(--danger); }
+
+.timebar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.play { font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); cursor: pointer; min-width: 72px; }
+.clock { font-family: var(--font-data); font-size: 15px; white-space: nowrap; }
+
+.two { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; }
+@media (max-width: 1100px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+svg { display: block; width: 100%; height: auto; max-width: 100%; }
+svg text { font-family: var(--font-body); fill: var(--muted); font-size: 11px; }
+svg .t-ink { fill: var(--ink); }
+svg .t-strong { fill: var(--ink); font-weight: 700; font-size: 12px; }
+.grid-line { stroke: var(--line); stroke-width: 1; }
+.axis-line { stroke: var(--muted); stroke-width: 1; }
+.gate-mark { cursor: pointer; }
+.info-line { font-size: 13px; color: var(--muted); min-height: 1.5em; }
+.info-line b { color: var(--ink); }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+th, td { padding: 8px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; color: var(--muted); font-weight: 500; }
+td.r, th.r { text-align: right; }
+td small { color: var(--muted); display: block; font-size: 11.5px; }
+tfoot td { font-weight: 700; border-bottom: 0; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.danger { color: var(--danger); } .pill.warn { color: var(--warn); } .pill.watch { color: var(--watch); } .pill.ok { color: var(--ok); }
+
+.notes { display: grid; gap: 10px; }
+.notes ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 80ch; }
+.notes li { color: var(--muted); }
+.notes li b { color: var(--ink); }
+.notes a { color: var(--accent); }
+.calc-ov { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 13px; z-index: 3; }
+.terrain-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+@media (max-width: 1100px) { .terrain-grid { grid-template-columns: minmax(0, 1fr); } }
+.terrain-grid > div { display: grid; gap: 8px; min-width: 0; align-content: start; }
+.contour-wrap { position: relative; }
+canvas#contour { width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--line); cursor: crosshair; }
+canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#view3d { position: relative; width: 100%; height: 560px; border-radius: 6px; border: 1px solid var(--line); background: var(--land); overflow: hidden; touch-action: none; }
+@media (max-width: 640px) { #view3d { height: 380px; } }
+.ramp { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.ramp-bar { height: 10px; width: 180px; max-width: 100%; border-radius: 3px; background: linear-gradient(90deg, rgb(150,186,128) 0%, rgb(200,214,150) 20%, rgb(230,214,150) 40%, rgb(217,178,124) 60%, rgb(190,140,98) 90%); }
+.row-ctl { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.row-ctl input[type="range"] { width: 160px; }
+.btn-ghost { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.typhoon summary { cursor: pointer; font-size: 14px; }
+.ty-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 900px) { .ty-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .ty-grid { grid-template-columns: minmax(0, 1fr); } }
+.ty-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.ty-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">TWVD 2001 高程（EL. m）・模擬時長 8 小時</div>
+    <h1>新店溪洩洪淹水模擬器</h1>
+    <p class="lede">調整上游洩洪、淡水河口潮位、市區雨量與各疏散門狀態，看河道水位怎麼變化、哪個水門會先被河水漫過，以及萬華、中正、大安堤內哪些地方、多少建物會淹水。數值依據你提供的 PDF（新店溪洩洪與淹水模擬系統設計）整理，屬於教學用的簡化模型。</p>
+  </header>
+
+  <div class="presets" id="presets" role="group" aria-label="情境範例"></div>
+
+  <details class="panel typhoon" id="typhoonBox">
+    <summary><b>颱風預報換算</b>：把中央氣象署雨量預報、翡翠水庫放流量與潮位換算成模擬參數</summary>
+    <div class="ty-grid">
+      <div class="ctl"><div class="ctl-head"><label for="tyUp">新店溪上游（烏來、坪林）24 小時雨量</label><output id="tyUpOut" class="num"></output></div><input type="range" id="tyUp" min="0" max="1000" step="25" value="400"></div>
+      <div class="ctl"><div class="ctl-head"><label for="tyCity">臺北市區最大時雨量</label><output id="tyCityOut" class="num"></output></div><input type="range" id="tyCity" min="0" max="150" step="5" value="60"></div>
+      <div class="ctl"><div class="ctl-head"><label for="tyRes">翡翠水庫放流量（依水庫公告）</label><output id="tyResOut" class="num"></output></div><input type="range" id="tyRes" min="0" max="5000" step="100" value="1000"></div>
+      <div class="ctl"><div class="ctl-head"><label for="tyTide">淡水河口預報滿潮潮位</label><output id="tyTideOut" class="num"></output></div><input type="range" id="tyTide" min="0" max="2.5" step="0.1" value="1.6"></div>
+    </div>
+    <div class="ty-row">
+      <div class="info-line" id="tyCalc"></div>
+      <div class="ty-btns">
+        <button type="button" class="btn-ghost" data-ty="low">輕度：上游 250 mm</button>
+        <button type="button" class="btn-ghost" data-ty="mid">中度：上游 500 mm</button>
+        <button type="button" class="btn-ghost" data-ty="high">嚴重（共伴）：上游 800 mm</button>
+        <button type="button" class="play" id="tyApply">套用到模擬</button>
+      </div>
+    </div>
+    <div class="hint">換算方式：新店溪洪峰 ≈ 0.278 × C × i × A ＋ 翡翠水庫放流量（合理化公式）。A 取碧潭以上扣除翡翠水庫集水區、再加景美溪，約 717 km²；C 取 0.7（颱風期間山區土壤飽和）；i 是 6 小時平均雨強，假設 6 小時雨量約占 24 小時的 45%。這是快速估算，誤差可能達 ±30% 以上；實際洪峰請看經濟部水利署防災資訊網的河川水位預報與翡翠水庫管理局放流公告。三個快速按鈕只是示意分級，不是薔琵颱風的實際預報。</div>
+  </details>
+
+  <div class="layout">
+    <aside class="panel controls" aria-label="模擬參數">
+      <div class="group">
+        <div class="group-title">河川與天候</div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="q">上游洪峰流量</label><output id="qOut" class="num"></output></div>
+          <input type="range" id="q" min="1000" max="12000" step="250">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="tide">淡水河口滿潮潮位</label><output id="tideOut" class="num"></output></div>
+          <input type="range" id="tide" min="0" max="2.5" step="0.1">
+        </div>
+        <label class="check"><input type="checkbox" id="tideSync"> 洪峰時剛好遇上滿潮</label>
+        <div class="ctl">
+          <div class="ctl-head"><label for="rain">市區降雨強度（峰值）</label><output id="rainOut" class="num"></output></div>
+          <input type="range" id="rain" min="0" max="150" step="5">
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">排水系統</div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="sewer">雨水下水道收水能力</label><output id="sewerOut" class="num"></output></div>
+          <input type="range" id="sewer" min="40" max="120" step="0.1">
+          <div class="hint">臺北市設計標準 78.8 mm/hr（5 年重現期暴雨），長期目標 88.8 mm/hr。</div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="pumpmm">抽水站抽水能力</label><output id="pumpOut" class="num"></output></div>
+          <input type="range" id="pumpmm" min="0" max="90" step="5">
+          <div class="hint">設計標準 45 mm/hr（5 年重現期颱風雨），新建或更新時提高到 60 mm/hr。</div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="avail">抽水機可用率</label><output id="availOut" class="num"></output></div>
+          <input type="range" id="avail" min="0" max="100" step="10">
+          <div class="hint">停電、機組故障或進水口阻塞時調低。</div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">疏散門（點按切換，或點地圖上的水門）</div>
+        <div class="gate-list" id="gateList"></div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="open">未關閉水門的開口比例</label><output id="openOut" class="num"></output></div>
+          <input type="range" id="open" min="10" max="100" step="10">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="close">搶險封堵完成時間</label><output id="closeOut" class="num"></output></div>
+          <input type="range" id="close" min="0.5" max="8" step="0.5">
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">水門缺口流量係數</div>
+        <div class="ctl">
+          <div class="ctl-head"><label for="cc">C（Q = C·B·H<sup>1.5</sup>，SI）</label><output id="ccOut" class="num"></output></div>
+          <input type="range" id="cc" min="1.1" max="1.8" step="0.05">
+          <div class="hint">文獻合理範圍 1.45–1.70（C<sub>d</sub> 0.85–1.0 × 1.705）；預設 1.55。</div>
+        </div>
+        <label class="check"><input type="checkbox" id="cPdf"> 改用 PDF 原文係數比較（≈ 17，不符物理）</label>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="kpis" id="kpis" aria-live="polite"></section>
+
+      <div class="panel">
+        <div class="timebar">
+          <button type="button" class="play" id="play">▶ 播放</button>
+          <input type="range" id="time" min="0" max="96" step="1" aria-label="模擬時間">
+          <span class="clock" id="clock"></span>
+        </div>
+      </div>
+
+      <div class="two">
+        <section class="panel">
+          <div class="chart-head">
+            <h2>平面示意圖</h2>
+            <div class="legend"><span><i style="background:var(--river)"></i>河道</span><span><i style="background:var(--flood);opacity:.6"></i>堤內積水（越深越濃）</span></div>
+          </div>
+          <svg id="map" viewBox="0 0 640 430" role="img" aria-label="新店溪沿岸疏散門與堤內窪地示意圖"></svg>
+          <div class="info-line" id="mapInfo"></div>
+        </section>
+        <section class="panel">
+          <div class="chart-head">
+            <h2 id="tsTitle">水位歷線</h2>
+            <div class="legend"><span><i style="background:var(--river)"></i>堤外河道</span><span><i style="background:var(--flood)"></i>堤內平衡水位（簡化模型）</span><span><i style="background:var(--danger)"></i>水門底檻</span></div>
+          </div>
+          <svg id="tsStage" viewBox="0 0 420 210" role="img" aria-label="選定水門內外水位歷線"></svg>
+          <div class="chart-head">
+            <h2>進出堤內的流量</h2>
+            <div class="legend"><span><i style="background:var(--danger)"></i>水門／越堤灌入</span><span><i style="background:var(--warn)"></i>降雨超過下水道收水</span><span><i style="background:var(--accent)"></i>下水道收走地面積水</span></div>
+          </div>
+          <svg id="tsFlow" viewBox="0 0 420 170" role="img" aria-label="選定水門灌入流量歷線"></svg>
+          <div class="info-line" id="drainInfo"></div>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="chart-head">
+          <h2>河道縱斷面</h2>
+          <div class="legend"><span><i style="background:var(--river)"></i>水面</span><span><i style="background:var(--muted)"></i>防洪牆堤頂</span><span><i style="background:var(--ground)"></i>高灘地</span><span><i style="background:var(--danger)"></i>水門底檻</span></div>
+        </div>
+        <div class="table-wrap" style="overflow-x:auto"><svg id="profile" viewBox="0 0 820 300" style="min-width:560px" role="img" aria-label="新店溪由華江橋至碧潭的水位縱斷面"></svg></div>
+      </section>
+
+      <section class="panel">
+        <div class="chart-head">
+          <h2>臺北市側堤內實測地形：二維水流、等高線與 3D</h2>
+          <span class="hint" id="terrainWhen"></span>
+        </div>
+        <div class="terrain-grid">
+          <div>
+            <div class="contour-wrap"><canvas id="contour" width="840" height="630" aria-label="萬華、中正、大安新店溪北岸實測等高線地形圖，疊加目前淹水範圍與建物"></canvas><canvas id="flowLayer" width="840" height="630" aria-hidden="true"></canvas></div>
+            <div class="info-line" id="flowStatus"></div>
+            <div class="info-line" id="contourInfo"></div>
+            <div class="legend"><span><i style="background:#123f9e;height:8px"></i>堤內積水（越深越濃）</span><span><i style="background:rgb(120,200,235);height:8px"></i>堤外河道、高灘地</span></div>
+            <div class="ramp"><span>EL. 3 m</span><span class="ramp-bar"></span><span>8 m</span><span>・防洪牆為深灰色</span></div>
+            <div class="legend"><span><i style="background:#2b2b2b;height:4px"></i>橋樑</span><span><i style="background:#5b2a86;height:8px;border-radius:50%"></i>公共設施</span><span><i style="background:#fff;height:8px;border:2px solid #555;width:8px"></i>其他疏散門（OSM）</span><span><i style="background:rgb(214,69,65);height:3px"></i>道路中斷</span><span><i style="background:rgb(242,153,74);height:3px"></i>道路危險</span></div>
+            <div class="legend"><span><i style="background:rgb(222,216,206);height:8px"></i>建物未淹水</span><span><i style="background:rgb(242,201,76);height:8px"></i>建物周邊水深 0.1–0.5 m</span><span><i style="background:rgb(242,153,74);height:8px"></i>0.5–1 m</span><span><i style="background:rgb(214,69,65);height:8px"></i>≥ 1 m</span></div>
+          </div>
+          <div>
+            <div id="view3d"><div id="calcOverlay" class="calc-ov" hidden></div></div>
+            <div class="row-ctl">
+              <label for="ex">垂直誇張</label>
+              <input type="range" id="ex" min="3" max="30" step="1" value="12">
+              <output id="exOut" class="num">12×</output>
+              <button type="button" class="btn-ghost" id="play3d">▶ 播放動態</button>
+              <label class="check"><input type="checkbox" id="showBld" checked> 顯示建物</label>
+              <button type="button" class="btn-ghost" id="reset3d">重設視角</button>
+            </div>
+            <div class="hint">拖曳旋轉、滾輪或雙指縮放、右鍵平移。建物高度以約 5 倍比例顯示，顏色代表建物周邊水深。按「播放動態」看 8 小時內水面連續漲退；白色流線是堤內漫流，淡藍色是新店溪主流（主流流速依流量粗估），移動速度是實際流速的 120 倍。紅色方塊是未關閉的水門，關閉時變綠。</div>
+          </div>
+        </div>
+        <div class="hint">地形取自內政部 2025 年 20 m DEM（臺北市分幅，TWD97 E 299000–304600、N 2766400–2770600，約 5.6 × 4.2 km，涵蓋華江橋到公館的新店溪北岸）。防洪牆沿 DEM 稜線描繪，堤頂高程依 PDF 補為 10.2–11.2 m；華江、華中、馬場町三座水門的位置取自 OpenStreetMap 的疏散門標註；古亭門依 PDF「同安街底」與 OSM 同安街路線推定；OSM 裡沒有標註景福疏散門，所以景福門仍是概略位置。地圖上白色小方塊是 OSM 裡其他疏散門（華翠、華中二、富民、果菜市場，以及淡水河岸的桂林、貴陽），只標示位置，沒有納入水門控制。堤內積水從水門和最低窪處沿相連的低地擴散，範圍外的堤內地區沒有計入。</div>
+      </section>
+
+      <section class="panel">
+        <div class="chart-head">
+          <h2>建物受災統計（萬華、中正、大安堤內）</h2>
+          <span class="hint" id="bldWhen"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>建物周邊水深</th><th class="r">棟數</th><th class="r">占範圍內建物</th><th class="r">估計樓地板面積</th><th>代表情形</th></tr></thead>
+            <tbody id="bBody"></tbody>
+            <tfoot id="bFoot"></tfoot>
+          </table>
+        </div>
+        <div class="hint">建物來自臺北市「自動化 3D 近似建物模型」（data.taipei，經 sheethub/tpe3d 轉為 GeoJSON，約 2017 年資料），範圍內共 <span id="bldAll"></span> 棟。水深取建物所在 20 m 格的二維模擬結果；樓地板面積用「建物高度 ÷ 3.3 m」估樓層數，再乘上建物占地面積。</div>
+      </section>
+
+      <section class="panel">
+        <div class="chart-head">
+          <h2>道路與公共設施（萬華、中正、大安沿岸）</h2>
+          <span class="hint" id="infraWhen"></span>
+        </div>
+        <div class="kpis" id="roadKpis" style="grid-template-columns:repeat(4,minmax(0,1fr))"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>設施</th><th>類型</th><th class="r">所在位置水深</th><th>狀態</th></tr></thead>
+            <tbody id="pubBody"></tbody>
+          </table>
+        </div>
+        <div class="hint">道路、橋樑與設施取自 OpenStreetMap（經 OSM 官方 API 下載，涵蓋整個模擬範圍：萬華、中正、大安區沿新店溪一帶，資料下載日 2026-10-19）。道路每 20 m 取一段，依所在格水深分為積水、危險、中斷三級；中斷是一般車輛無法通行的水深（≥ 0.5 m）。橋樑在 DEM 與建物資料中都沒有，3D 中的橋面高度是依兩端地面加 6 m 示意。OSM 的學校多半沒有名稱，只標「學校」。</div>
+      </section>
+
+      <section class="panel">
+        <div class="chart-head">
+          <h2>南萬華各里災情（PDF 假設高程）</h2>
+          <span class="hint" id="villageWhen"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>里別</th><th class="r">基準高程</th><th class="r">最大水深</th><th class="r">平均水深</th><th class="r">一樓浸水戶</th><th class="r">受影響戶</th><th>燈號</th></tr></thead>
+            <tbody id="vBody"></tbody>
+            <tfoot id="vFoot"></tfoot>
+          </table>
+        </div>
+        <div class="hint"><b>這張表沿用 PDF 的里別基準高程（3.38–4.05 m），但實測 DEM 顯示青年公園以北一帶地面多在 EL. 4.1–5.6 m，比 PDF 高約 1 m，所以這裡的戶數很可能高估。</b>要算出可信的各里戶數，需要里界圖資和門牌或建物資料。一樓浸水戶：地面水深 ≥ 0.1 m 的建物，以每棟約 25% 住戶在一樓估算。受影響戶：再加上周邊路面水深 ≥ 0.5 m、出入受困的樓上住戶（PDF 的判定規則）。各里地面高程以「基準高程起 0.5 m 內均勻分布」估算。</div>
+      </section>
+
+      <section class="panel notes">
+        <h2>模型假設，以及和 PDF 不一樣的地方</h2>
+        <ul>
+          <li><b>PDF 的水門流量係數不符物理，已修正。</b>寬頂堰（含水門缺口）的流量公式是 Q = C<sub>d</sub>·(2/3)<sup>1.5</sup>·√g·B·H<sup>1.5</sup> = C<sub>d</sub>·1.705·B·H<sup>1.5</sup>（Henderson, 1966）。1.705 是理論上限，實務的 C<sub>d</sub> 約 0.85–1.0（Bos, 1985；Hager & Schwalt, 1994），所以 C 約 1.45–1.70；HEC-RAS 潰堤常用值 2.6（英制）換算約 1.44。PDF 說 B = 10 m、H = 1.8 m 時 Q ≈ 410 m³/s，代回去 C ≈ 17、C<sub>d</sub> ≈ 3.8，超過理論上限，代表通過缺口的能量比水位能提供的還多，不可能發生。合理值約 35–41 m³/s。模擬器預設 C = 1.55（C<sub>d</sub> ≈ 0.91）；勾選「PDF 原文」只用來比較。若水位高過門洞上緣（例如 OSM 標示華翠疏散門限高 2.8 m），會轉成孔口流，流量更小，目前沒有模擬。</li>
+          <li><b>排水系統依臺北市設計標準建模。</b>雨水下水道收水上限 78.8 mm/hr（5 年重現期暴雨）；抽水站以 45 mm/hr（5 年重現期颱風雨）設計，民國 93 年納莉／911 豪雨檢討後，新建或更新時提高到 60 mm/hr。地面積水和降雨都先經下水道收水，存進管網（假設可暫存 20 mm），再由抽水站排出；外水位低於 EL. 2.5 m 時重力閘門可自然排水，高於此值就只能靠抽水站，也就是 PDF 說的「外水頂託」。管網滿了就收不進水，水留在地面。</li>
+          <li><b>抽水站位置取自臺北市資料大平臺。</b>範圍內有雙園、古亭、貴陽、景美四站（雙園、古亭建在堤防上，以最近的堤內格代表），二維模型依最近抽水站劃分集水區。各站實際抽水量沒有公開在這份資料裡，所以用「設計標準 × 集水面積」估算；實際機組容量可查水利處「抽水站運轉狀態」資料或洽水利工程處。</li>
+          <li><b>各里戶數不是官方資料。</b>五個里的總戶數、基準高程、權重，照抄 PDF 裡 Gemini 範例程式的設定值，沒有比對內政部門牌或北市府戶政統計。</li>
+          <li><b>河道水位是簡化率定曲線，不是 HEC-RAS 演算。</b>依 PDF 的敘述校準：流量約 3,000 m³/s 時馬場町高灘地（EL. 4.5–5.2 m）開始淹水，約 5,500 m³/s 時馬場町外水位約 EL. 7.0 m；並加入淡水河口潮位頂託、馬場町彎道凹岸雍高、景美溪迴水。</li>
+          <li><b>水門底檻、堤頂高程取自 PDF：</b>華江 4.2、華中 4.6、馬場町 5.2、古亭 6.2、景福 7.2 m；堤頂依河段補為 10.2–13.5 m。華江門＝華江疏散門（新四號）、華中門＝華中一疏散門（新三號）、馬場町門＝馬場疏散門（新一號），位置取自 OSM。古亭門依 OSM 同安街末端推定（距堤防約 15 m）；景福門位置仍是概略的。兩門後方實測地面都比 PDF 描述高，灌入的水會往低處流向中正、萬華。</li>
+          <li><b>臺北市側堤內地形用實測 DEM。</b>五座水門後方是相連的同一片堤內低地（萬華、中正、大安），水位—體積曲線由 20 m DEM 依連通淹水計算。萬華地勢由東南往西北下降，最低處在西北側（華江、西園一帶）；公館、台大一帶地勢較高。PDF 說加蚋仔碗底只有 EL. 3.3–3.4 m，實測同一帶地面約高 1 m。20 m 網格看不到巷弄間的微地形，地下道等小坑以 EL. 2.6 m 計。</li>
+          <li><b>道路、橋樑與公共設施來自 OpenStreetMap。</b>涵蓋整個模擬範圍；橋樑不參與水流計算，3D 橋面高度為示意。</li>
+          <li><b>建物用孔隙率法放進水流計算。</b>每個 20 m 格依建物覆蓋率降低可蓄水與可通水的比例，並提高糙度，所以水會沿著建物間的空隙與街道流動。建物資料是臺北市自動化 3D 近似建物模型（約 2017 年），之後新建或拆除的建物不會反映。</li>
+          <li><b>二維水流用局部慣性淺水波法（Bates et al., 2010）。</b>在 20 m 實測 DEM 上計算萬華堤內的水深與流速，曼寧糙度在空地取 0.035，建物越密越高。水門入流依堤外水位和水門後方的局部水位計算（地圖下方顯示的是每 5 分鐘的平均值），所以數值會和上方簡化模型略有不同。抽水站假設在各水門附近，用來抽排的容量和左側設定相同。地圖上的白色粒子沿計算出的流場移動，動畫速度是實際流速的 120 倍。</li>
+          <li><b>模擬範圍只到 DEM 裁切邊界。</b>北邊約到龍山寺（N 2770600），更北的大同、中山低地沒有計入，邊界視為封閉，所以高水位時積水深度可能偏高。新北側（永和、中和、板橋）沒有 DEM 與建物資料，不在範圍內。</li>
+          <li><b>水門開著時水可以雙向流。</b>河道退水後，堤內積水會從同一個開口流回河道（含潛沒堰流修正）。</li>
+          <li><b>颱風預報換算是快速估算。</b>新店溪洪峰用合理化公式估計，沒有考慮降雨時間分布、河道演算與水庫操作規則；套用後水門預設全部關閉，可再自行打開個別水門測試失效情境。</li>
+          <li><b>用途限於教學與情境比較。</b>實際的淹水潛勢與疏散資訊，請以經濟部水利署、臺北市政府工務局水利工程處公布的資料為準。</li>
+        </ul>
+      </section>
+
+      <footer class="panel notes" id="credits">
+        <h2>資料來源與授權</h2>
+        <ul>
+          <li><b>地形：</b>內政部國土測繪中心 2025 年 20 m 數值高程模型（臺北市分幅），依<a href="https://data.gov.tw/license" target="_blank" rel="noopener">政府資料開放授權條款第 1 版</a>使用。</li>
+          <li><b>建物：</b>臺北市「自動化 3D 近似建物模型」（臺北市資料大平臺），經 <a href="https://github.com/sheethub/tpe3d" target="_blank" rel="noopener">sheethub/tpe3d</a> 轉為 GeoJSON（程式碼為 BSD 授權）。</li>
+          <li><b>抽水站：</b>臺北市政府工務局水利工程處「臺北市水利處抽水站」（<a href="https://data.gov.tw/dataset/143901" target="_blank" rel="noopener">data.gov.tw</a>）。</li>
+          <li><b>道路、橋樑、公共設施、疏散門：</b>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>，依 ODbL 授權使用（2026-10-19 下載）。</li>
+          <li><b>情境參數：</b>使用者提供的「新店溪洩洪與淹水模擬系統設計」文件（Gemini 對話整理），水門流量係數已依 Henderson (1966)、Bos (1985) 等文獻修正；下水道與抽水站標準依臺北市雨水下水道設計規範。</li>
+          <li><b>3D 繪圖：</b><a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>（MIT 授權）。</li>
+          <li><b>免責聲明：</b>本頁為教學與情境比較用的簡化模擬，不是官方淹水預報或疏散指示。實際災情與避難資訊請以中央氣象署、經濟部水利署與臺北市政府公告為準。</li>
+        </ul>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+//@@DEMDATA@@
+//@@ENGINE@@
+
+// ---------------- 介面狀態 ----------------
+const DRAIN0 = { sewerMM: 78.8, pumpMM: 60, avail: 100 };
+const PRESETS = [
+  { id: "pdf", name: "PDF 情境：馬場町門未關（外水 7.0 m）", p: { Qpeak: 5500, tide: 1.0, tideSync: true, rain: 40, ...DRAIN0, C: 1.55, openPct: 100, closeAt: 8, gateOpen: { machangding: true } } },
+  { id: "typhoon", name: "颱風調節性洩洪＋大潮（水門正常）", p: { Qpeak: 3000, tide: 1.8, tideSync: true, rain: 40, ...DRAIN0, C: 1.55, openPct: 100, closeAt: 8, gateOpen: {} } },
+  { id: "lower", name: "華江、華中門未關＋暴潮", p: { Qpeak: 3500, tide: 2.5, tideSync: true, rain: 40, ...DRAIN0, C: 1.55, openPct: 100, closeAt: 8, gateOpen: { huajiang: true, huazhong: true } } },
+  { id: "rain", name: "內水型：水門關閉＋時雨量 110 mm", p: { Qpeak: 6000, tide: 1.5, tideSync: true, rain: 110, ...DRAIN0, C: 1.55, openPct: 100, closeAt: 8, gateOpen: {} } },
+  { id: "pumpfail", name: "抽水站故障：可用率 30%＋時雨量 70 mm", p: { Qpeak: 6000, tide: 1.5, tideSync: true, rain: 70, ...DRAIN0, avail: 30, C: 1.55, openPct: 100, closeAt: 8, gateOpen: {} } },
+  { id: "extreme", name: "接近 200 年洪峰", p: { Qpeak: 11500, tide: 2.0, tideSync: true, rain: 80, ...DRAIN0, C: 1.55, openPct: 100, closeAt: 8, gateOpen: {} } }
+];
+let P = JSON.parse(JSON.stringify(PRESETS[0].p));
+let activePreset = "pdf";
+let frames = [];
+let tIdx = 48;
+let selGate = 2;
+let timer = null;
+
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 2) => Number(v).toFixed(d);
+const fmtInt = v => Math.round(v).toLocaleString("zh-TW");
+const hhmm = t => { const m = Math.round(t * 60); return `T+${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(parent, x, y, s, attrs = {}) { const t = el("text", { x, y, ...attrs }, parent); t.textContent = s; return t; }
+
+// ---------------- 控制項 ----------------
+function buildPresets() {
+  const box = $("presets");
+  PRESETS.forEach(pr => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "preset"; b.textContent = pr.name; b.dataset.id = pr.id;
+    b.addEventListener("click", () => { P = JSON.parse(JSON.stringify(pr.p)); activePreset = pr.id; syncControls(); recompute(); });
+    box.appendChild(b);
+  });
+}
+function buildGateList() {
+  const box = $("gateList");
+  GATES.forEach((g, i) => {
+    const row = document.createElement("div");
+    row.className = "gate-row"; row.id = "gr-" + g.id;
+    row.innerHTML = `<div><b>${g.name}</b><small>底檻 EL. ${fmt(g.sill, 1)} m・${g.area}</small></div><button type="button" class="switch" id="gs-${g.id}"></button>`;
+    row.querySelector("button").addEventListener("click", () => toggleGate(i));
+    box.appendChild(row);
+  });
+}
+function toggleGate(i) {
+  const id = GATES[i].id;
+  P.gateOpen[id] = !P.gateOpen[id];
+  selGate = i; activePreset = null;
+  syncControls(); recompute();
+}
+function bindRange(id, key, scale = 1) {
+  $(id).addEventListener("input", e => { P[key] = Number(e.target.value) * scale; activePreset = null; syncControls(); recompute(); });
+}
+function syncControls() {
+  $("q").value = P.Qpeak; $("qOut").textContent = fmtInt(P.Qpeak) + " m³/s";
+  $("tide").value = P.tide; $("tideOut").textContent = "EL. " + fmt(P.tide, 1) + " m";
+  $("tideSync").checked = P.tideSync;
+  $("rain").value = P.rain; $("rainOut").textContent = P.rain + " mm/hr";
+  const Akm2 = BASINS.wanhua.rainArea, toCms = mm => mm / 1000 / 3600 * Akm2;
+  $("sewer").value = P.sewerMM; $("sewerOut").textContent = fmt(P.sewerMM, 1) + " mm/hr";
+  $("pumpmm").value = P.pumpMM; $("pumpOut").textContent = `${P.pumpMM} mm/hr ≈ ${fmtInt(toCms(P.pumpMM))} m³/s`;
+  $("avail").value = P.avail; $("availOut").textContent = P.avail + "%";
+  $("open").value = P.openPct; $("openOut").textContent = P.openPct + "%";
+  $("close").value = P.closeAt; $("closeOut").textContent = P.closeAt >= 8 ? "未封堵" : hhmm(P.closeAt);
+  const pdfC = P.C >= 5; $("cPdf").checked = pdfC; $("cc").disabled = pdfC; if (!pdfC) $("cc").value = P.C; $("ccOut").textContent = pdfC ? "≈ 17（PDF）" : fmt(P.C, 2);
+  GATES.forEach(g => {
+    const failed = !!P.gateOpen[g.id];
+    $("gr-" + g.id).classList.toggle("failed", failed);
+    $("gs-" + g.id).textContent = failed ? "未關閉" : "已關閉";
+    $("gs-" + g.id).setAttribute("aria-label", `${g.name}：${failed ? "未關閉" : "已關閉"}，點按切換`);
+  });
+  document.querySelectorAll(".preset").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === activePreset));
+}
+
+// ---------------- 計算 ----------------
+function recompute() {
+  frames = simulate(P);
+  resetParticles();
+  render();
+  clearTimeout(recompute.t); recompute.t = setTimeout(runFlow, 250);
+}
+
+// ---------------- 繪圖 ----------------
+const MAP = {
+  river: [[70, 120], [180, 160], [300, 178], [392, 150], [462, 214], [505, 300], [565, 405]],
+  basins: [
+    { cx: 112, cy: 62, rx: 62, ry: 34 },
+    { cx: 205, cy: 104, rx: 48, ry: 28 },
+    { cx: 300, cy: 104, rx: 66, ry: 42 },
+    { cx: 398, cy: 86, rx: 44, ry: 28 },
+    { cx: 528, cy: 160, rx: 42, ry: 26 }
+  ],
+  gateAt: [[86, 104], [182, 143], [300, 160], [388, 132], [478, 196]]
+};
+
+function renderMap(fr) {
+  const svg = $("map"); svg.innerHTML = "";
+  el("rect", { x: 0, y: 0, width: 640, height: 430, fill: "var(--land)" }, svg);
+  txt(svg, 24, 26, "臺北市（萬華・中正）", { class: "t-strong" });
+  txt(svg, 150, 300, "新北市（永和・中和・板橋）", { class: "t-strong" });
+  txt(svg, 624, 26, "示意圖・非比例尺", { "text-anchor": "end" });
+  // 景美溪
+  el("path", { d: "M630 190 C 590 196, 520 205, 462 214", fill: "none", stroke: "var(--river)", "stroke-width": 5, "stroke-linecap": "round", opacity: .7 }, svg);
+  txt(svg, 600, 182, "景美溪", { "text-anchor": "middle" });
+  txt(svg, 40, 140, "淡水河 →", { "text-anchor": "middle" });
+  // 高灘地淹水：依該段平均溢出高灘地的水深加寬
+  const pts = MAP.river;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const ex = ((fr.Z[i] - NODES[i].plain) + (fr.Z[i + 1] - NODES[i + 1].plain)) / 2;
+    if (ex > 0) el("line", { x1: pts[i][0], y1: pts[i][1], x2: pts[i + 1][0], y2: pts[i + 1][1], stroke: "var(--river)", "stroke-width": 16 + ex * 12, "stroke-linecap": "round", opacity: .28 }, svg);
+  }
+  const w = 6 + 12 * Math.min(1, fr.Q / 12000);
+  el("polyline", { points: pts.map(p => p.join(",")).join(" "), fill: "none", stroke: "var(--river)", "stroke-width": w, "stroke-linecap": "round", "stroke-linejoin": "round" }, svg);
+  NODES.forEach((n, i) => {
+    if (i >= 5) txt(svg, pts[i][0] + 14, pts[i][1] + 4, n.name, { class: "t-ink" });
+  });
+  // 堤內窪地
+  GATES.forEach((g, i) => {
+    const b = MAP.basins[i], r = fr.gates[i];
+    const op = r.depth > 0.02 ? Math.min(0.85, 0.18 + r.depth / 3) : 0;
+    el("ellipse", { cx: b.cx, cy: b.cy, rx: b.rx, ry: b.ry, fill: "var(--surface)", stroke: i === selGate ? "var(--accent)" : "var(--line)", "stroke-width": i === selGate ? 2 : 1, style: "cursor:pointer" }, svg).addEventListener("click", () => { selGate = i; render(); });
+    if (op) el("ellipse", { cx: b.cx, cy: b.cy, rx: b.rx * Math.min(1, 0.35 + r.area / g.amax * 0.65), ry: b.ry * Math.min(1, 0.35 + r.area / g.amax * 0.65), fill: "var(--flood)", "fill-opacity": op }, svg);
+    txt(svg, b.cx, b.cy - 2, g.area.split("・")[0], { "text-anchor": "middle", class: "t-ink" });
+    txt(svg, b.cx, b.cy + 13, r.depth > 0.02 ? `積水 ${fmt(r.depth)} m` : "無積水", { "text-anchor": "middle", class: "num" });
+  });
+  // 水門
+  GATES.forEach((g, i) => {
+    const [x, y] = MAP.gateAt[i], r = fr.gates[i];
+    const failed = !!P.gateOpen[g.id];
+    const gEl = el("g", { class: "gate-mark", tabindex: 0, role: "button", "aria-label": `${g.name}，${failed ? "未關閉" : "已關閉"}，點按切換` }, svg);
+    const over = r.zr > g.sill;
+    el("rect", { x: x - 9, y: y - 9, width: 18, height: 18, rx: 3, fill: failed ? "var(--danger)" : "var(--surface)", stroke: failed ? "var(--danger)" : (over ? "var(--warn)" : "var(--ok)"), "stroke-width": 2.5 }, gEl);
+    if (r.isOpen && r.qGate > 0.5) el("path", { d: `M${x} ${y - 10} L${x} ${y - 22}`, stroke: "var(--danger)", "stroke-width": 3, "marker-end": "" }, gEl);
+    txt(gEl, x + 12, y + 20, g.name, { class: "t-ink" });
+    gEl.addEventListener("click", () => toggleGate(i));
+    gEl.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleGate(i); } });
+  });
+  const g = GATES[selGate], r = fr.gates[selGate];
+  $("mapInfo").innerHTML = `<b>${g.name}</b>：堤外水位 EL. <span class="num">${fmt(r.zr)}</span> m，底檻 ${fmt(g.sill, 1)} m，` +
+    (r.zr > g.sill ? `<b>高出底檻 ${fmt(r.zr - g.sill)} m</b>` : `低於底檻 ${fmt(g.sill - r.zr)} m`) +
+    `；堤內水位 EL. <span class="num">${fmt(r.zin)}</span> m，淹水面積約 <span class="num">${fmt(r.area / 1e6)}</span> km²。`;
+}
+
+function axes(svg, X, Y, xTicks, yTicks, box, xFmt, yFmt) {
+  yTicks.forEach(v => {
+    el("line", { x1: box.l, x2: box.r, y1: Y(v), y2: Y(v), class: "grid-line" }, svg);
+    txt(svg, box.l - 6, Y(v) + 4, yFmt(v), { "text-anchor": "end", class: "num" });
+  });
+  xTicks.forEach(v => txt(svg, X(v), box.b + 16, xFmt(v), { "text-anchor": "middle", class: "num" }));
+  el("line", { x1: box.l, x2: box.r, y1: box.b, y2: box.b, class: "axis-line" }, svg);
+}
+function niceRange(min, max, step) { return [Math.floor(min / step) * step, Math.ceil(max / step) * step]; }
+function ticks(a, b, step) { const out = []; for (let v = a; v <= b + 1e-9; v += step) out.push(+v.toFixed(6)); return out; }
+
+function renderStageTS() {
+  const svg = $("tsStage"); svg.innerHTML = "";
+  const g = GATES[selGate];
+  $("tsTitle").textContent = `${g.name} 內外水位`;
+  const box = { l: 40, r: 410, t: 10, b: 180 };
+  const zr = frames.map(f => f.gates[selGate].zr), zi = frames.map(f => f.gates[selGate].depth > 0.005 ? f.gates[selGate].zin : null);
+  const all = zr.concat(zi.filter(v => v !== null), [g.sill, g.zb]);
+  const [y0, y1] = niceRange(Math.min(...all) - 0.3, Math.max(...all) + 0.3, 1);
+  const X = t => box.l + (t / SIM_HOURS) * (box.r - box.l);
+  const Y = v => box.b - (v - y0) / (y1 - y0) * (box.b - box.t);
+  axes(svg, X, Y, ticks(0, 8, 2), ticks(y0, y1, y1 - y0 > 8 ? 2 : 1), box, v => v + "h", v => v);
+  el("line", { x1: box.l, x2: box.r, y1: Y(g.sill), y2: Y(g.sill), stroke: "var(--danger)", "stroke-dasharray": "5 4", "stroke-width": 1.5 }, svg);
+  txt(svg, box.r - 2, Y(g.sill) - 5, `底檻 ${g.sill}`, { "text-anchor": "end" });
+  const lev = NODES[g.node].levee;
+  if (lev <= y1) { el("line", { x1: box.l, x2: box.r, y1: Y(lev), y2: Y(lev), stroke: "var(--muted)", "stroke-width": 1.5 }, svg); txt(svg, box.r - 2, Y(lev) - 5, `堤頂 ${lev}`, { "text-anchor": "end" }); }
+  el("polyline", { points: frames.map((f, i) => `${X(f.t)},${Y(zr[i])}`).join(" "), fill: "none", stroke: "var(--river)", "stroke-width": 2.5 }, svg);
+  const seg = []; frames.forEach((f, i) => { if (zi[i] !== null) seg.push(`${X(f.t)},${Y(zi[i])}`); });
+  if (seg.length) {
+    const first = frames.findIndex((f, i) => zi[i] !== null);
+    const lastI = frames.length - 1 - [...zi].reverse().findIndex(v => v !== null);
+    el("polygon", { points: `${X(frames[first].t)},${Y(g.zb)} ${seg.join(" ")} ${X(frames[lastI].t)},${Y(g.zb)}`, fill: "var(--flood)", "fill-opacity": .22 }, svg);
+    el("polyline", { points: seg.join(" "), fill: "none", stroke: "var(--flood)", "stroke-width": 2.5 }, svg);
+  } else {
+    txt(svg, (box.l + box.r) / 2, box.b - 12, "堤內沒有積水", { "text-anchor": "middle" });
+  }
+  cursor(svg, X(frames[tIdx].t), box);
+}
+function cursor(svg, x, box) {
+  el("line", { x1: x, x2: x, y1: box.t, y2: box.b, stroke: "var(--ink)", "stroke-width": 1, "stroke-dasharray": "2 3" }, svg);
+}
+function renderFlowTS() {
+  const svg = $("tsFlow"); svg.innerHTML = "";
+  const box = { l: 40, r: 410, t: 10, b: 140 };
+  const qin = frames.map(f => Math.max(0, f.gates[selGate].qGate + f.gates[selGate].qOver));
+  const qr = frames.map(f => f.gates[selGate].qRain), qp = frames.map(f => f.gates[selGate].qPump);
+  const mx = Math.max(10, ...qin, ...qr, ...qp);
+  const step = mx > 200 ? 100 : mx > 80 ? 40 : mx > 40 ? 20 : 5;
+  const top = Math.ceil(mx / step) * step;
+  const X = t => box.l + (t / SIM_HOURS) * (box.r - box.l);
+  const Y = v => box.b - v / top * (box.b - box.t);
+  axes(svg, X, Y, ticks(0, 8, 2), ticks(0, top, step), box, v => v + "h", v => v);
+  txt(svg, box.l + 4, box.t + 10, "m³/s", {});
+  el("polygon", { points: `${X(0)},${Y(0)} ` + frames.map((f, i) => `${X(f.t)},${Y(qin[i])}`).join(" ") + ` ${X(SIM_HOURS)},${Y(0)}`, fill: "var(--danger)", "fill-opacity": .18, stroke: "var(--danger)", "stroke-width": 2 }, svg);
+  el("polyline", { points: frames.map((f, i) => `${X(f.t)},${Y(qr[i])}`).join(" "), fill: "none", stroke: "var(--warn)", "stroke-width": 2 }, svg);
+  el("polyline", { points: frames.map((f, i) => `${X(f.t)},${Y(qp[i])}`).join(" "), fill: "none", stroke: "var(--accent)", "stroke-width": 2, "stroke-dasharray": "4 3" }, svg);
+  cursor(svg, X(frames[tIdx].t), box);
+}
+
+function renderProfile(fr) {
+  const svg = $("profile"); svg.innerHTML = "";
+  const box = { l: 44, r: 806, t: 26, b: 262 };
+  const X = km => box.l + km / 15 * (box.r - box.l);
+  const Y = v => box.b - (v + 4) / 26 * (box.b - box.t);
+  axes(svg, X, Y, [0, 2.5, 5, 7.5, 10, 12.5, 15], ticks(-4, 22, 4), box, v => v + " km", v => v);
+  txt(svg, box.l - 6, box.t - 12, "EL. m", { "text-anchor": "end" });
+  const kms = NODES.map(n => n.km);
+  // 河床
+  el("polygon", { points: `${X(0)},${box.b} ` + NODES.map(n => `${X(n.km)},${Y(n.bed)}`).join(" ") + ` ${X(15)},${box.b}`, fill: "var(--ground)", "fill-opacity": .55 }, svg);
+  // 水面
+  el("polygon", { points: NODES.map(n => `${X(n.km)},${Y(n.bed)}`).join(" ") + " " + [...NODES].reverse().map((n, j) => `${X(n.km)},${Y(fr.Z[NODES.length - 1 - j])}`).join(" "), fill: "var(--river)", "fill-opacity": .35 }, svg);
+  el("polyline", { points: NODES.map((n, i) => `${X(n.km)},${Y(fr.Z[i])}`).join(" "), fill: "none", stroke: "var(--river)", "stroke-width": 2.5 }, svg);
+  // 高灘地、堤頂
+  el("polyline", { points: NODES.map(n => `${X(n.km)},${Y(n.plain)}`).join(" "), fill: "none", stroke: "var(--ground)", "stroke-width": 3 }, svg);
+  el("polyline", { points: NODES.map(n => `${X(n.km)},${Y(n.levee)}`).join(" "), fill: "none", stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "6 4" }, svg);
+  NODES.forEach((n, i) => {
+    const x = X(n.km);
+    el("circle", { cx: x, cy: Y(fr.Z[i]), r: 3.5, fill: "var(--river)" }, svg);
+    const anchor = i === 0 ? "start" : i === NODES.length - 1 ? "end" : "middle";
+    txt(svg, x, box.t - 12, n.name, { "text-anchor": anchor, class: "t-ink" });
+    txt(svg, x, box.t + 2, fmt(fr.Z[i]), { "text-anchor": anchor, class: "num" });
+  });
+  GATES.forEach((g, i) => {
+    const x = X(NODES[g.node].km) + (i === 0 ? 10 : 0);
+    const over = fr.gates[i].zr > g.sill;
+    el("line", { x1: x - 8, x2: x + 8, y1: Y(g.sill), y2: Y(g.sill), stroke: "var(--danger)", "stroke-width": 3 }, svg);
+    txt(svg, x, Y(g.sill) + 15, g.name.replace("門", ""), { "text-anchor": "middle", class: over ? "t-strong" : "" });
+  });
+  txt(svg, box.l, box.b + 32, "← 下游（華江橋・三河匯流）", {});
+  txt(svg, box.r, box.b + 32, "上游（碧潭・翡翠水庫方向）→", { "text-anchor": "end" });
+}
+
+function renderKPIs(fr) {
+  const m = fr.gates[2];
+  const peakM = Math.max(...frames.map(f => f.gates[2].zr));
+  const inflow = fr.gates.reduce((s, r) => s + Math.max(0, r.qGate + r.qOver), 0);
+  let deep = 0, deepI = 0; fr.gates.forEach((r, i) => { if (r.depth > deep) { deep = r.depth; deepI = i; } });
+  const fs = floodStats(fr);
+  const overtop = fr.gates.some((r, i) => r.qOver > 0);
+  $("kpis").innerHTML = `
+    <div class="kpi ${m.zr > GATES[2].sill ? "alert" : ""}"><span class="kpi-label">馬場町堤外水位</span><span class="kpi-value">${fmt(m.zr)}<small>m</small></span><span class="kpi-sub">峰值 ${fmt(peakM)} m・底檻 5.2 m</span></div>
+    <div class="kpi ${inflow > 0.5 ? "alert" : ""}"><span class="kpi-label">河水灌入堤內</span><span class="kpi-value">${fmtInt(inflow)}<small>m³/s</small></span><span class="kpi-sub">${overtop ? "已有防洪牆越堤" : "全部經由未關閉水門"}</span></div>
+    <div class="kpi ${fs.maxD >= 1 ? "alert" : ""}"><span class="kpi-label">堤內最深積水</span><span class="kpi-value">${FLOW.result ? fmt(fs.maxD) : "—"}<small>m</small></span><span class="kpi-sub">${FLOW.result ? "二維水流結果" : "二維計算中"}</span></div>
+    <div class="kpi ${fs.total > 0 ? "alert" : ""}"><span class="kpi-label">堤內淹水面積</span><span class="kpi-value">${fmt(fs.total, 1)}<small>公頃</small></span><span class="kpi-sub">${fs.total > 0 ? `水深 ≥ 0.5 m：${fmt(fs.c2 + fs.c3, 1)} 公頃・受影響建物 ${fmtInt(buildingStats(fr).total)} 棟` : "依實測 DEM 計算"}</span></div>`;
+}
+
+function renderInfra(fr) {
+  const st = infraStats(fr);
+  const cut = st.km[0], risk = st.km[1], wet = st.km[2];
+  $("roadKpis").innerHTML = `
+    <div class="kpi ${cut > 0 ? "alert" : ""}"><span class="kpi-label">道路中斷（≥ 0.5 m）</span><span class="kpi-value">${fmt(cut, 1)}<small>km</small></span></div>
+    <div class="kpi"><span class="kpi-label">危險路段（0.3–0.5 m）</span><span class="kpi-value">${fmt(risk, 1)}<small>km</small></span></div>
+    <div class="kpi"><span class="kpi-label">積水路段（0.1–0.3 m）</span><span class="kpi-value">${fmt(wet, 1)}<small>km</small></span></div>
+    <div class="kpi"><span class="kpi-label">範圍內道路總長</span><span class="kpi-value">${fmt(st.total, 1)}<small>km</small></span></div>`;
+  const LBL = ["中斷", "危險", "積水"], CLS = ["danger", "warn", "watch"];
+  $("pubBody").innerHTML = st.pubs.map(p => { const c = roadStatus(p.depth); return `<tr><td><b>${p.n}</b></td><td>${p.label}</td><td class="r num">${p.depth > 0.005 ? fmt(p.depth) + " m" : "—"}</td><td><span class="pill ${c >= 0 ? CLS[c] : "ok"}">${c >= 0 ? LBL[c] : "無積水"}</span></td></tr>`; }).join("");
+  $("infraWhen").textContent = `${hhmm(fr.t)}・${FLOW.result ? "二維水流結果" : "靜水面估算"}`;
+}
+
+function renderBuildingTable(fr) {
+  const bs = buildingStats(fr);
+  const DESC = ["一樓與地下室進水，樓上住戶受困", "一樓明顯進水，車輛泡水", "地下室、車道進水，騎樓積水"];
+  $("bBody").innerHTML = BLD_CLASS.map((c, i) => `<tr><td><span class="pill ${["danger", "warn", "watch"][i]}">${c.label}</span></td><td class="r num">${fmtInt(bs.cnt[i])}</td><td class="r num">${fmt(bs.cnt[i] / bs.all * 100, 1)}%</td><td class="r num">${fmt(bs.floor[i] / 1e4, 1)} 公頃</td><td>${DESC[i]}</td></tr>`).join("");
+  $("bFoot").innerHTML = `<tr><td>合計</td><td class="r num">${fmtInt(bs.total)}</td><td class="r num">${fmt(bs.total / bs.all * 100, 1)}%</td><td class="r num">${fmt((bs.floor[0] + bs.floor[1] + bs.floor[2]) / 1e4, 1)} 公頃</td><td></td></tr>`;
+  $("bldAll").textContent = fmtInt(bs.all);
+  $("bldWhen").textContent = `${hhmm(fr.t)}・${FLOW.result ? "二維水流結果" : "靜水面估算（二維計算中）"}`;
+}
+
+function renderVillages(fr) {
+  const m = fr.gates[2];
+  const vs = villageStats(m.depth > 0.005 ? m.zin : -99);
+  const LBL = { danger: "高危險", warn: "警戒", watch: "注意", ok: "無積水" };
+  $("vBody").innerHTML = vs.map(v => `<tr>
+    <td><b>${v.name}</b><small>${v.where}</small></td>
+    <td class="r num">${fmt(v.base)}</td>
+    <td class="r num">${v.maxDepth > 0 ? fmt(v.maxDepth) : "—"}</td>
+    <td class="r num">${v.avgDepth > 0 ? fmt(v.avgDepth) : "—"}</td>
+    <td class="r num">${fmtInt(v.flooded)}</td>
+    <td class="r num">${fmtInt(v.affected)} <small>/ ${fmtInt(v.total)}</small></td>
+    <td><span class="pill ${v.level}">${LBL[v.level]}</span></td></tr>`).join("");
+  const f = vs.reduce((s, v) => s + v.flooded, 0), a = vs.reduce((s, v) => s + v.affected, 0);
+  $("vFoot").innerHTML = `<tr><td colspan="4">合計</td><td class="r num">${fmtInt(f)}</td><td class="r num">${fmtInt(a)}</td><td></td></tr>`;
+  const park = m.zin >= 4.6 ? "青年公園已蓄滿，與周邊道路連成一片" : m.zin >= 4.5 ? "水已漫過花台，正灌入青年公園" : "青年公園外圍花台（約 EL. 4.5 m）尚未被漫過";
+  $("villageWhen").textContent = `${hhmm(fr.t)}・堤內水位 EL. ${m.depth > 0.005 ? fmt(m.zin) : "—"} m・${park}`;
+}
+
+function render() {
+  const fr = frames[tIdx];
+  $("time").value = tIdx;
+  $("clock").textContent = `${hhmm(fr.t)}・${fmtInt(fr.Q)} m³/s・潮位 ${fmt(fr.tide, 1)} m`;
+  renderKPIs(fr); renderMap(fr); renderStageTS(); renderFlowTS(); renderProfile(fr); renderVillages(fr);
+  renderContour(fr); update3D(fr); renderBuildingTable(fr); renderInfra(fr);
+  const dr = fr.drain;
+  if (dr) {
+    let st = "";
+    if (FLOW.result) { const s = FLOW.result.sew[Math.min(tIdx, FLOW.result.sew.length - 1)]; st = "・各站管網：" + DRAIN.stations.map((x, i) => `${x.n.replace("抽水站", "")} ${Math.round(s[i] * 100)}%`).join("、"); }
+    $("drainInfo").innerHTML = `排水系統：重力閘門 <b>${dr.gravity ? "可自然排水" : "外水過高，關閉"}</b>・下水道管網 <b class="num">${Math.round(dr.fill * 100)}%</b> 滿・抽排 <b class="num">${fmtInt(dr.out)}</b> m³/s${st}`;
+  }
+  const m = fr.gates[2];
+  $("terrainWhen").textContent = `${hhmm(fr.t)}・堤外 EL. ${fmt(m.zr)} m・堤內 EL. ${m.depth > 0.005 ? fmt(m.zin) : "—"} m`;
+}
+
+//@@TERRAIN@@
+//@@FLOW@@
+
+// ---------------- 播放 ----------------
+let tPos = null; // 播放中的連續時間（以 5 分鐘為 1 格），供 3D 內插
+function stop() { timer = null; tPos = null; $("play").textContent = "▶ 播放"; $("play3d").textContent = "▶ 播放動態"; T3.dirty = true; }
+function play() {
+  if (timer) return stop();
+  if (tIdx >= frames.length - 1) tIdx = 0;
+  tPos = tIdx; $("play").textContent = "❚❚ 暫停"; $("play3d").textContent = "❚❚ 暫停";
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let last = 0; const id = timer = {};
+  const step = ts => {
+    if (timer !== id) return;
+    const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0; last = ts;
+    tPos = Math.min(frames.length - 1, tPos + dt * (reduce ? 3 : 6));
+    if (Math.floor(tPos) !== tIdx) { tIdx = Math.floor(tPos); render(); }
+    if (tPos >= frames.length - 1) { tIdx = frames.length - 1; render(); return stop(); }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+$("play").addEventListener("click", play);
+$("play3d").addEventListener("click", play);
+$("time").addEventListener("input", e => { if (timer) stop(); tIdx = Number(e.target.value); render(); });
+
+buildPresets(); buildGateList();
+bindRange("q", "Qpeak"); bindRange("tide", "tide"); bindRange("rain", "rain"); bindRange("sewer", "sewerMM"); bindRange("pumpmm", "pumpMM"); bindRange("avail", "avail"); bindRange("cc", "C"); bindRange("open", "openPct"); bindRange("close", "closeAt");
+$("tideSync").addEventListener("change", e => { P.tideSync = e.target.checked; activePreset = null; syncControls(); recompute(); });
+$("cPdf").addEventListener("change", e => { P.C = e.target.checked ? 17 : Number($("cc").value) || 1.55; activePreset = null; syncControls(); recompute(); });
+bindContourHover(); init3D();
+$("showBld").addEventListener("change", e => { if (T3.bld) T3.bld.visible = e.target.checked; });
+$("ex").addEventListener("input", e => { T3.ex = Number(e.target.value); $("exOut").textContent = T3.ex + "×"; applyHeights(); });
+$("reset3d").addEventListener("click", () => { if (!T3.ok) return; T3.camera.position.set(...CAM0); T3.controls.target.set(0, 4, 0); });
+// ---- 颱風預報換算 ----
+const TY_A = 717, TY_C = 0.7, TY_6H = 0.45;
+function tyCompute() {
+  const up = +$("tyUp").value, city = +$("tyCity").value, res = +$("tyRes").value, tide = +$("tyTide").value;
+  const i6 = up * TY_6H / 6, qFree = 0.278 * TY_C * i6 * TY_A, Q = Math.min(12000, Math.round((qFree + res) / 250) * 250);
+  $("tyUpOut").textContent = up + " mm"; $("tyCityOut").textContent = city + " mm/hr"; $("tyResOut").textContent = fmtInt(res) + " m³/s"; $("tyTideOut").textContent = "EL. " + fmt(tide, 1) + " m";
+  $("tyCalc").innerHTML = `6 小時平均雨強 <b class="num">${fmt(i6, 1)}</b> mm/hr → 自然流量約 <b class="num">${fmtInt(qFree)}</b> ＋ 水庫放流 <b class="num">${fmtInt(res)}</b> ＝ 新店溪洪峰約 <b class="num">${fmtInt(qFree + res)}</b> m³/s`;
+  return { Q, city, tide };
+}
+["tyUp", "tyCity", "tyRes", "tyTide"].forEach(id => $(id).addEventListener("input", tyCompute));
+const TY_LEVELS = { low: [250, 40, 500, 1.4], mid: [500, 70, 1500, 1.6], high: [800, 100, 3000, 1.8] };
+document.querySelectorAll("[data-ty]").forEach(b => b.addEventListener("click", () => { const v = TY_LEVELS[b.dataset.ty]; ["tyUp", "tyCity", "tyRes", "tyTide"].forEach((id, i) => $(id).value = v[i]); tyCompute(); }));
+$("tyApply").addEventListener("click", () => {
+  const r = tyCompute();
+  P = { ...JSON.parse(JSON.stringify(PRESETS[1].p)), Qpeak: Math.max(1000, r.Q), rain: r.city, tide: r.tide, tideSync: true, gateOpen: {} };
+  activePreset = null; syncControls(); recompute();
+});
+tyCompute();
+syncControls(); recompute();
+</script>
