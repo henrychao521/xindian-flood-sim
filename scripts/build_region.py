@@ -29,58 +29,7 @@ ny, nx = Z.shape
 nodata = np.isnan(Z)
 Z[nodata] = 20.0  # 範圍外（無資料）視為高地，不參與計算
 
-# ---------------- 2. 河道、堤線、堤內 ----------------
-waterMax = cfg.get("waterMax", 1.0)
-low = (Z < waterMax) & ~nodata
-for poly in cfg.get("notChannel", []):  # 堤內的低窪地（例如洲美），不要誤判為河道
-    jj, ii = np.mgrid[0:ny, 0:nx]
-    low &= ~Path(np.array(poly)).contains_points(np.c_[ii.ravel(), jj.ravel()]).reshape(ny, nx)
-lab, n = ndimage.label(low)
-sz = ndimage.sum(low, lab, range(1, n + 1))
-chan = np.isin(lab, [k + 1 for k in range(n) if sz[k] >= cfg.get("minChannel", 150)])
-for poly in cfg.get("extraChannel", []):  # 手動補上的河道（例如上游水面較高的河段）
-    pts = np.array(poly)
-    for (i0, j0), (i1, j1) in zip(pts[:-1], pts[1:]):
-        for t in np.linspace(0, 1, int(max(abs(i1 - i0), abs(j1 - j0))) * 3 + 1):
-            i, j = int(round(i0 + (i1 - i0) * t)), int(round(j0 + (j1 - j0) * t))
-            chan[max(0, j - 2):j + 3, max(0, i - 2):i + 3] = True
-dist = ndimage.distance_transform_edt(~chan)
-ring = (dist > 0) & (dist <= cfg.get("wallDist", 2.0))
-block = chan | ring | nodata
-manual = np.zeros_like(chan)
-for poly in cfg.get("levee", []):  # 手動描繪的堤線（格點座標），會吸附到附近最高點
-    S = []
-    for x, y in poly:
-        best = None
-        for j in range(max(0, y - 2), min(ny, y + 3)):
-            for i in range(max(0, x - 2), min(nx, x + 3)):
-                if best is None or Z[j, i] > Z[best]: best = (j, i)
-        S.append(best)
-    for (j0, i0), (j1, i1) in zip(S[:-1], S[1:]):
-        for t in np.linspace(0, 1, int(max(abs(j1 - j0), abs(i1 - i0))) * 3 + 1):
-            manual[int(round(j0 + (j1 - j0) * t)), int(round(i0 + (i1 - i0) * t))] = True
-manual = ndimage.binary_dilation(manual, structure=np.ones((2, 2), bool))
-block |= manual
-seeds = [tuple(s[::-1]) for s in cfg["inlandSeeds"]]
-inland = np.zeros_like(chan)
-for s in seeds:
-    if not block[s]:
-        inland |= (ndimage.label(~block)[0] == ndimage.label(~block)[0][s])
-for s in seeds: assert inland[s], f"seed {s} is blocked"
-wall = (ring | manual) & ndimage.binary_dilation(inland, iterations=1) & ~inland
-far = (dist > 10) & ~inland & ~wall
-mask = np.where(wall, 2, np.where(inland, 1, np.where(far, 3, 0))).astype(np.uint8)
-mask[nodata & ~inland] = 3
-
-# 堤頂：DEM 與設定值取大（20 m 網格會把窄的防洪牆平均掉）
-crest = cfg.get("crest", 10.0)
-Zb = Z.copy()
-Zb[wall] = np.maximum(Z[wall], crest)
-Zi = Zb.copy()
-pitFloor = cfg.get("pitFloor", float(np.percentile(Z[inland], 0.5)))
-Zi[inland] = np.maximum(Zi[inland], pitFloor)
-
-# ---------------- 3. OSM（官方 API 分塊下載，快取於 work/<id>/osm） ----------------
+# ---------------- 2. OSM（官方 API 分塊下載，快取於 work/<id>/osm） ----------------
 osmdir = WORK / "osm"; osmdir.mkdir(exist_ok=True)
 lon0, lat0 = TO_LL.transform(xa, ya); lon1, lat1 = TO_LL.transform(xb, yb)
 tiles = []
@@ -112,6 +61,74 @@ def xy(ids):
         if i in nodes:
             X, Y = TO_TM.transform(nodes[i][0], nodes[i][1]); out.append((round(X - xa, 1), round(Y - ya, 1)))
     return out
+
+# ---------------- 3. 河道、堤線、堤內 ----------------
+waterMax = cfg.get("waterMax", 1.0)
+low = (Z < waterMax) & ~nodata
+for poly in cfg.get("notChannel", []):  # 堤內的低窪地（例如洲美），不要誤判為河道
+    jj, ii = np.mgrid[0:ny, 0:nx]
+    low &= ~Path(np.array(poly)).contains_points(np.c_[ii.ravel(), jj.ravel()]).reshape(ny, nx)
+lab, n = ndimage.label(low)
+sz = ndimage.sum(low, lab, range(1, n + 1))
+chan = np.isin(lab, [k + 1 for k in range(n) if sz[k] >= cfg.get("minChannel", 150)])
+for poly in cfg.get("extraChannel", []):  # 手動補上的河道（例如上游水面較高的河段）
+    pts = np.array(poly)
+    for (i0, j0), (i1, j1) in zip(pts[:-1], pts[1:]):
+        for t in np.linspace(0, 1, int(max(abs(i1 - i0), abs(j1 - j0))) * 3 + 1):
+            i, j = int(round(i0 + (i1 - i0) * t)), int(round(j0 + (j1 - j0) * t))
+            chan[max(0, j - 2):j + 3, max(0, i - 2):i + 3] = True
+for nm in cfg.get("osmRivers", []):  # 依 OSM 河道中線補上河道（上游水面高於 waterMax 的河段）
+    hw = cfg.get("osmRiverHalfWidth", 2)
+    for ids, tg in ways.values():
+        if tg.get("waterway") != "river" or tg.get("name") != nm: continue
+        p = np.array(xy(ids)) / D
+        for a2, b2 in zip(p[:-1], p[1:]):
+            for t in np.linspace(0, 1, int(max(abs(b2 - a2))) * 3 + 2):
+                i, j = int(round(a2[0] + (b2[0] - a2[0]) * t)), int(round(a2[1] + (b2[1] - a2[1]) * t))
+                if 0 <= i < nx and 0 <= j < ny: chan[max(0, j - hw):j + hw + 1, max(0, i - hw):i + hw + 1] = True
+dist = ndimage.distance_transform_edt(~chan)
+ring = (dist > 0) & (dist <= cfg.get("wallDist", 2.0))
+block = chan | ring | nodata
+manual = np.zeros_like(chan)
+for poly in cfg.get("levee", []):  # 手動描繪的堤線（格點座標），會吸附到附近最高點
+    S = []
+    for x, y in poly:
+        best = None
+        for j in range(max(0, y - 2), min(ny, y + 3)):
+            for i in range(max(0, x - 2), min(nx, x + 3)):
+                if best is None or Z[j, i] > Z[best]: best = (j, i)
+        S.append(best)
+    for (j0, i0), (j1, i1) in zip(S[:-1], S[1:]):
+        for t in np.linspace(0, 1, int(max(abs(j1 - j0), abs(i1 - i0))) * 3 + 1):
+            manual[int(round(j0 + (j1 - j0) * t)), int(round(i0 + (i1 - i0) * t))] = True
+manual = ndimage.binary_dilation(manual, structure=np.ones((2, 2), bool))
+block |= manual
+seeds = [tuple(s[::-1]) for s in cfg["inlandSeeds"]]
+inland = np.zeros_like(chan)
+for s in seeds:
+    if not block[s]:
+        inland |= (ndimage.label(~block)[0] == ndimage.label(~block)[0][s])
+for s in seeds: assert inland[s], f"seed {s} is blocked"
+wall = (ring | manual) & ndimage.binary_dilation(inland, iterations=1) & ~inland
+far = (dist > 10) & ~inland & ~wall
+mask = np.where(wall, 2, np.where(inland, 1, np.where(far, 3, 0))).astype(np.uint8)
+mask[nodata & ~inland] = 3
+
+# 堤頂：DEM 與設定值取大（20 m 網格會把窄的防洪牆平均掉）
+crest = cfg.get("crest", 10.0)
+Zb = Z.copy()
+if any("crest" in nd for nd in cfg["nodes"]):  # 坡陡的河川：各段堤頂取最近節點的設定值
+    wj0, wi0 = np.where(wall)
+    nc = np.array([nd["cell"] for nd in cfg["nodes"]]); ncr = np.array([nd.get("crest", crest) for nd in cfg["nodes"]])
+    near = np.argmin((wi0[:, None] - nc[None, :, 0]) ** 2 + (wj0[:, None] - nc[None, :, 1]) ** 2, axis=1)
+    Zb[wj0, wi0] = np.maximum(Z[wj0, wi0], ncr[near])
+else:
+    Zb[wall] = np.maximum(Z[wall], crest)
+Zi = Zb.copy()
+pitFloor = cfg.get("pitFloor", float(np.percentile(Z[inland], 0.5)))
+Zi[inland] = np.maximum(Zi[inland], pitFloor)
+
+# ---------------- 3b. 道路、公共設施、抽水站（抽水站需用到堤內範圍）----------------
 HW = {"motorway", "trunk", "primary", "secondary", "tertiary", "residential", "unclassified", "living_street", "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"}
 AM = {"school", "kindergarten", "hospital", "clinic", "police", "fire_station", "townhall", "community_centre", "library", "social_facility", "university", "college", "marketplace", "post_office"}
 roads, bridges, pubs, gates_osm = [], [], [], []
@@ -216,11 +233,14 @@ for nd in cfg["nodes"]:
     if prev is not None: cum += math.hypot(i - prev[0], j - prev[1]) * D / 1000
     prev = (i, j)
     win = (slice(max(0, j - 6), j + 7), slice(max(0, i - 6), i + 7))
-    zn = float(np.median(Z[win][chan[win]])) if chan[win].any() else nd.get("zn", 0.0)
+    if not chan[win].any():  # 節點不在河道上：吸附到最近的河道格
+        cj, ci = np.where(chan); k = int(np.argmin((ci - i) ** 2 + (cj - j) ** 2)); i, j = int(ci[k]), int(cj[k])
+        win = (slice(max(0, j - 6), j + 7), slice(max(0, i - 6), i + 7))
+    zn = float(np.percentile(Z[win][chan[win]], cfg.get("znPercentile", 50)))
     zn = nd.get("zn", zn)
     plain_cells = Z[win][(mask[win] == 0) & ~chan[win]]
     plain = float(np.median(plain_cells)) if len(plain_cells) else zn + 3
-    lev = nd.get("crest", crest)
+    lev = nd.get("crest", round(zn + cfg["crestAboveZn"], 1) if "crestAboveZn" in cfg else crest)
     nodes_out.append({"id": f"n{len(nodes_out)}", "name": nd["name"], "km": round(cum, 2), "cell": [i, j],
                       "bed": round(zn - nd.get("depth", 4), 2), "plain": round(max(plain, zn + 0.5), 2), "levee": lev,
                       "zn": round(zn, 2), "zd": round(lev - nd.get("freeboard", 1.5), 2), "tf": nd.get("tf", 0.5)})
