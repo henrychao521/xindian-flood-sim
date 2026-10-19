@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b0f">
+<title>Terrain GP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: phone-first, landscape. Thumbs own the bottom corners (steering pad left, pedals right); the broadcast graphics live in a thin top bar and a centre speed cluster. Setup is a full-screen sheet with a sticky start button. */
+:root{
+  --bg:#090b0f; --panel:rgba(12,15,21,.78); --panel-solid:#10141b; --raise:#171d28; --line:#263042; --line-soft:#1a2130;
+  --fg:#e9edf3; --muted:#8792a5; --accent:#57c4ff; --accent-ink:#04131d;
+  --purple:#b347ff; --green:#25d26a; --yellow:#ffd23f; --red:#ff4545; --blue:#3d7bff;
+  --f-display:"Saira Condensed","Arial Narrow",sans-serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px); --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+#view{position:fixed;inset:0;display:block;width:100%;height:100%}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ================= HUD ================= */
+.hud{position:fixed;z-index:3;pointer-events:none;font-family:var(--f-display);font-variant-numeric:tabular-nums}
+.panel{background:var(--panel);border:1px solid var(--line-soft);border-radius:6px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+
+#tower{top:calc(var(--st) + 8px);left:calc(var(--sl) + 8px);width:176px;overflow:hidden}
+.t-row{display:flex;align-items:baseline;gap:8px;padding:6px 10px 0}
+.lapchip{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.lapchip b{color:var(--fg);font-size:15px}
+#lapTime{font-size:26px;font-weight:700;line-height:1;margin-left:auto}
+#lapTime.invalid{color:var(--red);text-decoration:line-through;text-decoration-thickness:2px}
+.t-row2{display:flex;justify-content:space-between;padding:1px 10px 5px;font-size:13px;font-weight:700;min-height:16px}
+#lapState{color:var(--muted);font-size:11px;letter-spacing:.06em}
+#delta.up{color:var(--red)} #delta.down{color:var(--green)}
+.sectors{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:0 2px 2px}
+.sec{background:#1a202b;padding:2px 5px;font-size:10px;font-weight:600;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline;border-radius:2px}
+.sec span{font-size:11px;color:var(--fg)}
+.sec.purple{background:var(--purple);color:#f4e9ff}.sec.purple span{color:#fff}
+.sec.green{background:var(--green);color:#03240f}.sec.green span{color:#02160a}
+.sec.yellow{background:var(--yellow);color:#2d2400}.sec.yellow span{color:#1d1700}
+.rows{display:grid;grid-template-columns:auto 1fr;gap:1px 10px;padding:5px 10px 7px;margin:0;font-size:12px;font-weight:600}
+.rows dt{color:var(--muted);letter-spacing:.06em}.rows dd{margin:0;text-align:right}
+.rows .dsk{display:none}
+
+#rightCol{top:calc(var(--st) + 8px);right:calc(var(--sr) + 8px);display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+#hudBtns{display:flex;gap:6px;pointer-events:auto}
+.ibtn{width:44px;height:44px;border-radius:8px;background:var(--panel);border:1px solid var(--line);display:grid;place-items:center;cursor:pointer;padding:0;touch-action:manipulation}
+.ibtn svg{width:20px;height:20px;stroke:var(--fg);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ibtn.on{border-color:var(--accent);background:rgba(87,196,255,.18)}
+#mapBox{padding:5px;display:flex;flex-direction:column;gap:4px}
+#minimap{width:96px;height:96px;display:block}
+#profile{width:170px;height:40px;display:none}
+.cap{font-size:10px;letter-spacing:.14em;color:var(--muted);font-weight:600;display:none;justify-content:space-between}
+
+#wheel{left:50%;transform:translateX(-50%);bottom:calc(var(--sb) + 10px);padding:6px 12px 7px;display:grid;grid-template-areas:'leds leds' 'gear speed';gap:4px 12px;align-items:end;min-width:150px}
+#leds{grid-area:leds;display:grid;grid-template-columns:repeat(15,1fr);gap:3px;height:6px}
+#leds i{display:block;border-radius:2px;background:#202634}
+#leds i.g{background:var(--green);box-shadow:0 0 6px var(--green)}
+#leds i.r{background:var(--red);box-shadow:0 0 6px var(--red)}
+#leds i.b{background:var(--blue);box-shadow:0 0 6px var(--blue)}
+#leds.flash i{background:var(--blue);box-shadow:0 0 8px var(--blue)}
+.pedals{display:none;grid-area:ped}
+.pedal{width:8px;background:#1d2330;border-radius:2px;position:relative;overflow:hidden}
+.pedal i{position:absolute;left:0;right:0;bottom:0;height:0}
+#pThr i{background:var(--green)} #pBrk i{background:var(--red)}
+.gearbox{grid-area:gear;display:flex;flex-direction:column;align-items:center;line-height:.9}
+#gear{font-size:40px;font-weight:800;color:var(--accent);min-width:1.1ch;text-align:center}
+#rpm{display:none;font-size:12px;color:var(--muted);font-weight:600}
+.speed{grid-area:speed;display:flex;flex-direction:column;align-items:center;line-height:.9}
+#spd{font-size:44px;font-weight:800;min-width:2.6ch;text-align:center}
+.unit{font-size:10px;letter-spacing:.2em;color:var(--muted);font-weight:600}
+.chips{grid-area:chips;display:none;gap:6px;justify-content:center}
+.chip{font-size:11px;font-weight:700;letter-spacing:.1em;padding:1px 7px;border-radius:3px;border:1px solid var(--line);color:var(--muted)}
+.chip.avail{border-color:var(--green);color:var(--green)}
+.chip.on{background:var(--green);border-color:var(--green);color:#03240f}
+.chip.act{background:var(--yellow);border-color:var(--yellow);color:#2a2200}
+.chip.warn{background:var(--red);border-color:var(--red);color:#fff}
+
+#tele{left:calc(var(--sl) + 8px);top:calc(var(--st) + 112px);padding:8px 10px;display:grid;grid-template-columns:84px 150px;gap:8px;align-items:start}
+#gmeter{width:84px;height:84px;display:block}
+.tl{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:0;font-size:12px;font-weight:600}
+.tl dt{color:var(--muted);font-family:var(--f-body);font-weight:500;font-size:11px}
+.tl dd{margin:0;text-align:right;font-family:var(--f-data);font-size:11px;white-space:nowrap}
+.tl .dsk{display:none}
+.slip{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr 3.2em;gap:3px 8px;align-items:center;font-size:11px}
+.slip label{color:var(--muted);font-family:var(--f-body)}
+.bar{height:5px;background:#1d2330;border-radius:3px;position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);border-radius:3px}
+.bar i.hot{background:var(--red)}
+.slip output{font-family:var(--f-data);text-align:right}
+#balance{grid-column:1/-1;text-align:center;font-size:12px;letter-spacing:.1em;padding:2px;border-radius:3px;background:#1a202b;color:var(--muted)}
+#balance.under{background:rgba(87,196,255,.18);color:var(--accent)}
+#balance.over{background:rgba(255,69,69,.2);color:var(--red)}
+.tyre-cold{color:var(--accent)}.tyre-ok{color:var(--green)}.tyre-hot{color:var(--red)}
+
+#banner{top:calc(var(--st) + 30%);left:50%;transform:translateX(-50%);font-size:18px;font-weight:700;letter-spacing:.06em;padding:5px 14px;border-radius:4px;opacity:0;transition:opacity .25s;white-space:nowrap;z-index:4}
+#banner.show{opacity:1}
+#banner.bad{background:var(--red);color:#fff}#banner.good{background:var(--purple);color:#fff}#banner.info{background:var(--panel-solid);border:1px solid var(--line);color:var(--fg)}
+#lights{top:calc(var(--st) + 104px);left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:8px 12px;border-radius:6px;background:#050608;border:1px solid #222;z-index:4}
+#lights i{width:24px;height:24px;border-radius:50%;background:#2a0b0b;border:2px solid #111}
+#lights i.on{background:#ff2a2a;box-shadow:0 0 16px #ff2a2a}
+#hudCredit{bottom:calc(var(--sb) + 2px);left:50%;transform:translateX(-50%);font-family:var(--f-body);font-size:9px;color:rgba(233,237,243,.55);white-space:nowrap;text-shadow:0 1px 2px #000}
+
+/* ---------- touch controls ---------- */
+#touch{position:fixed;inset:0;z-index:2}
+#steerZone{position:absolute;left:0;bottom:0;width:44%;height:72%;touch-action:none}
+#steerRail{position:absolute;width:150px;height:44px;margin:-22px 0 0 -75px;border-radius:22px;background:rgba(15,19,27,.45);border:1px solid rgba(255,255,255,.16);left:calc(var(--sl) + 110px);top:calc(100% - var(--sb) - 70px);transition:opacity .2s}
+#steerRail::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:2px;margin-left:-1px;background:rgba(255,255,255,.25)}
+#steerKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(87,196,255,.35);border:2px solid rgba(87,196,255,.9)}
+#steerZone.active #steerRail{background:rgba(15,19,27,.6)}
+.zhint{position:absolute;left:calc(var(--sl) + 110px);transform:translateX(-50%);bottom:calc(var(--sb) + 104px);font-size:11px;color:rgba(233,237,243,.7);white-space:nowrap;text-shadow:0 1px 2px #000;pointer-events:none}
+#steerZone.active .zhint,#steerZone.used .zhint{display:none}
+#steerBtns{position:absolute;left:calc(var(--sl) + 12px);bottom:calc(var(--sb) + 14px);display:flex;gap:10px}
+.tbtn{pointer-events:auto;border-radius:14px;background:rgba(15,19,27,.5);border:1px solid rgba(255,255,255,.2);font-family:var(--f-display);font-weight:700;letter-spacing:.06em;display:grid;place-items:center;touch-action:none;color:var(--fg)}
+.tbtn.held{background:rgba(87,196,255,.4);border-color:var(--accent)}
+#steerBtns .tbtn{width:84px;height:84px;font-size:24px}
+#pedalZone{position:absolute;right:calc(var(--sr) + 12px);bottom:calc(var(--sb) + 14px);display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;gap:10px;align-items:end}
+#tGas{grid-column:2;grid-row:1/3;width:84px;height:170px;font-size:16px;align-content:end;padding-bottom:16px;background:rgba(37,210,106,.16);border-color:rgba(37,210,106,.55)}
+#tGas.held{background:rgba(37,210,106,.45)}
+#tBrake{grid-column:1;grid-row:2;width:84px;height:110px;font-size:16px;align-content:end;padding-bottom:14px;background:rgba(255,69,69,.14);border-color:rgba(255,69,69,.5)}
+#tBrake.held{background:rgba(255,69,69,.45)}
+#tDrs{grid-column:1;grid-row:1;justify-self:center;width:58px;height:46px;border-radius:23px;font-size:13px}
+#tDrs.avail{border-color:var(--green);color:var(--green)}
+#tDrs.on{background:var(--green);color:#03240f;border-color:var(--green)}
+body.autogas #tGas{display:none}
+body.autogas #pedalZone{grid-template-columns:auto}
+body.autogas #tBrake{height:150px}
+
+#shiftBtns{position:absolute;right:calc(var(--sr) + 12px);bottom:calc(var(--sb) + 194px);display:flex;gap:8px}
+#shiftBtns .tbtn{width:38px;height:44px;font-size:20px;border-radius:10px}
+@media (orientation:portrait) and (max-width:700px){#shiftBtns{bottom:calc(var(--sb) + 174px)}}
+body.autogas #shiftBtns{right:calc(var(--sr) + 108px)}
+#standings{top:calc(var(--st) + 8px);left:50%;transform:translateX(-50%);padding:5px 8px;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 420px)}
+.poshead{display:flex;align-items:baseline}
+#posBig{font-size:26px;font-weight:800;line-height:1}
+#posOf{font-size:14px;color:var(--muted);font-weight:700}
+.posrows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;font-size:12px;font-weight:600;min-width:0}
+.posrows li{display:grid;grid-template-columns:1.4em 6px minmax(0,8em) 3.6em;gap:5px;align-items:center;white-space:nowrap}
+.posrows li i{width:6px;height:12px;border-radius:1px}
+.posrows .nm{overflow:hidden;text-overflow:ellipsis;font-family:var(--f-body);font-size:11px}
+.posrows .gp{text-align:right;color:var(--muted)}
+.posrows .pn{color:var(--muted);text-align:right}
+.posrows li.me{color:var(--accent)}.posrows li.me .gp{color:var(--accent)}
+@media (orientation:portrait) and (max-width:700px){#standings{left:auto;right:calc(var(--sr) + 8px);transform:none;top:calc(var(--st) + 176px);max-width:60vw}}
+@media (min-width:900px) and (min-height:560px){#standings{left:calc(var(--sl) + 12px);transform:none;top:calc(var(--st) + 210px);flex-direction:column;align-items:stretch;max-width:none;padding:8px 10px}.posrows{font-size:13px}.posrows .nm{font-size:12px}}
+#results{position:fixed;inset:0;z-index:11;background:rgba(5,7,10,.55);display:grid;place-items:center;overflow:auto;padding:calc(var(--st) + 12px) max(12px,var(--sr)) calc(var(--sb) + 12px) max(12px,var(--sl))}
+.rcard{width:min(460px,100%)}
+.rtable{overflow-x:auto;max-height:46vh}
+.rtable table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.rtable th{text-align:left;color:var(--muted);font-weight:500;font-size:11px;padding:4px 6px;border-bottom:1px solid var(--line)}
+.rtable td{padding:6px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+.rtable td i{display:inline-block;width:6px;height:14px;border-radius:1px;vertical-align:middle}
+.rtable tr.me td{color:var(--accent);font-weight:700}
+
+/* ---------- pause ---------- */
+#pause{position:fixed;inset:0;z-index:10;background:rgba(5,7,10,.62);display:grid;place-items:center;padding:calc(var(--st) + 16px) max(16px,var(--sr)) calc(var(--sb) + 16px) max(16px,var(--sl))}
+.pcard{background:var(--panel-solid);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px;width:min(320px,100%)}
+.pcard h2{margin:0 0 4px;font-family:var(--f-display);font-size:26px;letter-spacing:.08em}
+.pcard .stats{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-family:var(--f-display);font-size:15px;margin:0 0 6px}
+.pcard .stats dt{color:var(--muted)}.pcard .stats dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- larger screens: full broadcast graphics ---------- */
+@media (min-width:900px) and (min-height:560px){
+  #tower{width:210px}
+  #lapTime{font-size:32px}
+  .sec{font-size:12px;padding:4px 6px;flex-direction:column}.sec span{font-size:14px}
+  .rows .dsk{display:block}
+  #minimap{width:170px;height:170px}#profile{display:block}.cap{display:flex}
+  #mapBox{padding:8px}
+  #wheel{bottom:calc(var(--sb) + 14px);grid-template-areas:'leds leds leds' 'ped speed gear' 'chips chips chips';padding:8px 14px 10px;min-width:300px;gap:4px 14px}
+  #leds{height:9px;gap:4px}
+  .pedals{display:flex;gap:4px;height:58px;align-self:center}
+  #gear{font-size:56px}#rpm{display:block}
+  #spd{font-size:62px}.unit{font-size:12px}
+  .chips{display:flex}
+  #tele{top:auto;bottom:calc(var(--sb) + 14px);left:calc(var(--sl) + 12px);grid-template-columns:116px 170px;padding:10px 12px;gap:10px}
+  #gmeter{width:116px;height:116px}
+  .tl{font-size:13px}.tl .dsk{display:block}.tl dd{font-size:12px}
+  #banner{font-size:22px}
+  #lights i{width:30px;height:30px}
+}
+/* portrait phones: speed cluster moves up out of the thumbs' way */
+@media (orientation:portrait) and (max-width:700px){
+  #wheel{bottom:auto;top:calc(var(--st) + 128px);left:calc(var(--sl) + 8px);transform:none;min-width:0}
+  #tele{top:calc(var(--st) + 200px)}
+  #steerZone{width:52%;height:55%}
+  #steerRail{left:calc(var(--sl) + 92px);width:140px;margin-left:-70px}
+  .zhint{left:calc(var(--sl) + 92px)}
+  #tGas{height:150px;width:76px}#tBrake{width:76px;height:96px}
+}
+
+/* ================= Setup sheet ================= */
+#setup{position:fixed;inset:0;z-index:20;background:rgba(5,7,10,.66);overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain}
+.sheet{min-height:100%;background:var(--panel-solid);display:flex;flex-direction:column;-webkit-user-select:text;user-select:text}
+.sh-head{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap;padding-top:calc(var(--st) + 14px);padding-bottom:10px;padding-left:max(16px,var(--sl));padding-right:max(16px,var(--sr))}
+.brand{font-family:var(--f-display);font-weight:800;font-size:30px;letter-spacing:.04em;line-height:.9}
+.brand em{font-style:normal;color:var(--accent)}
+.tagline{margin:0;color:var(--muted);font-size:13px;line-height:1.55;max-width:62ch;flex:1 1 280px;text-wrap:pretty}
+.sh-body{flex:1;display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding-left:max(16px,var(--sl));padding-right:max(16px,var(--sr));padding-bottom:16px}
+.mapcol{display:flex;flex-direction:column;gap:10px;min-width:0}
+#editor{width:100%;aspect-ratio:1;max-width:100%;border-radius:6px;border:1px solid var(--line);touch-action:none;background:#151a22;display:block}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px}
+.btn{background:var(--raise);border:1px solid var(--line);border-radius:8px;min-height:44px;padding:8px 14px;font-size:14px;cursor:pointer;touch-action:manipulation}
+.btn:hover{border-color:var(--accent)}
+.btn:disabled{opacity:.4}
+.btn.sel{border-color:var(--accent);background:rgba(87,196,255,.14);color:var(--accent)}
+.mapcol .btnrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.mapcol .btn{padding:6px 4px;font-size:13px}
+.hint{margin:0;font-size:13px;color:var(--muted);line-height:1.6}
+.hint b{color:var(--fg);font-family:var(--f-data);font-weight:500}
+.opts{display:flex;flex-direction:column;gap:12px;min-width:0}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;position:sticky;top:0;z-index:2}
+.step{min-height:42px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:14px;font-weight:500;cursor:pointer;touch-action:manipulation}
+.step.sel{background:var(--raise);color:var(--fg);font-weight:700;box-shadow:inset 0 -2px 0 var(--accent)}
+.pane{display:flex;flex-direction:column;gap:14px}
+.group{display:flex;flex-direction:column;gap:10px}
+.group h3{margin:0;font-family:var(--f-display);font-weight:700;letter-spacing:.12em;font-size:13px;color:var(--accent)}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{min-height:44px;background:var(--raise);border:0;border-right:1px solid var(--line);font-size:14px;cursor:pointer;color:var(--muted);touch-action:manipulation}
+.seg button:last-child{border-right:0}
+.seg button.sel{background:rgba(87,196,255,.16);color:var(--accent);font-weight:700}
+.field{display:grid;grid-template-columns:6.5em minmax(0,1fr) 4.6em;gap:10px;align-items:center;font-size:14px;min-height:40px}
+.field label{color:var(--muted)}
+.field output{font-family:var(--f-data);font-size:12px;text-align:right}
+input[type=range]{width:100%;height:32px;accent-color:var(--accent);touch-action:pan-x}
+.checks{display:flex;flex-direction:column;gap:2px;font-size:14px}
+.checks label{display:flex;gap:10px;align-items:center;cursor:pointer;min-height:40px}
+input[type=checkbox]{accent-color:var(--accent);width:20px;height:20px;flex:none}
+select{background:var(--raise);border:1px solid var(--line);color:var(--fg);border-radius:8px;min-height:44px;padding:6px 10px;font:inherit;font-size:14px}
+.upload{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.upload input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.upload label.btn{display:inline-flex;align-items:center}
+.drop{border:1px dashed var(--line);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--muted);line-height:1.55;display:flex;flex-direction:column;gap:8px}
+.drop.over{border-color:var(--accent);color:var(--fg)}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{width:40px;height:40px;border-radius:50%;border:3px solid transparent;cursor:pointer;padding:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
+.sw.sel{border-color:var(--fg)}
+.aerohint{font-family:var(--f-data);font-size:11px;color:var(--muted);text-align:right;margin-top:-8px}
+.credit{font-size:11px}
+.keys{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
+kbd{font-family:var(--f-data);font-size:11px;background:var(--raise);border:1px solid var(--line);border-radius:3px;padding:1px 5px;color:var(--fg)}
+.howto{margin:0;padding-left:1.2em;font-size:13px;color:var(--muted);line-height:1.7}
+.howto b{color:var(--fg);font-weight:500}
+body.touch .only-desk,body:not(.touch) .only-touch{display:none!important}
+.textfield{display:grid;grid-template-columns:6.5em minmax(0,1fr);align-items:center;gap:10px;font-size:14px;color:var(--muted)}
+input[type=text]{background:var(--raise);border:1px solid var(--line);color:var(--fg);border-radius:8px;min-height:44px;padding:6px 12px;font:inherit;font-size:16px;min-width:0;width:100%;box-sizing:border-box}
+.netrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px}
+.roomhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px}
+.roomhead span{flex:1;min-width:8em}
+.roomhead b{font-family:var(--f-data);font-size:18px;color:var(--accent);letter-spacing:.08em}
+.roster{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.roster li{display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--raise);border-radius:8px;padding:8px 10px}
+.roster li i{width:8px;height:18px;border-radius:2px}
+.roster li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.roster li em{font-style:normal;color:var(--muted);font-size:12px}
+.step{font-size:13px}
+.sh-foot{position:sticky;bottom:0;z-index:3;display:flex;gap:10px;align-items:center;background:var(--panel-solid);border-top:1px solid var(--line);padding-top:10px;padding-bottom:calc(var(--sb) + 10px);padding-left:max(16px,var(--sl));padding-right:max(16px,var(--sr))}
+.sh-foot .status{flex:1;min-width:0;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;min-height:50px;padding:10px 26px;font-family:var(--f-display);font-weight:800;font-size:19px;letter-spacing:.1em;cursor:pointer;touch-action:manipulation}
+.primary:disabled{opacity:.4;cursor:not-allowed}
+.pcard .primary,.pcard .btn{width:100%}
+
+/* phone portrait: start button spans the width */
+@media (max-width:560px){
+  .sh-foot .status{display:none}
+  .sh-foot .primary{flex:1}
+  .tagline{display:none}
+}
+/* phone landscape: map beside the options, sized to the visible height */
+@media (orientation:landscape) and (max-height:560px){
+  .sh-head{padding-top:calc(var(--st) + 8px);padding-bottom:6px}
+  .brand{font-size:24px}.tagline{display:none}
+  .sh-body{grid-template-columns:auto minmax(0,1fr)}
+  .mapcol{width:min(46vw,calc(100dvh - 128px));position:sticky;top:0;align-self:start}
+  .mapcol .btnrow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mapcol .btn{min-height:38px}
+}
+/* desktop: centred sheet */
+@media (min-width:900px) and (min-height:600px){
+  #setup{padding:24px 0}
+  .sheet{min-height:0;max-width:1060px;margin:0 auto;border:1px solid var(--line);border-radius:10px;overflow:clip}
+  .sh-head{padding:22px 26px 12px}
+  .brand{font-size:40px}
+  .sh-body{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;padding:0 26px 20px}
+  .mapcol{position:sticky;top:0;align-self:start}
+  .sh-foot{padding:12px 26px;border-radius:0 0 10px 10px}
+}
+#busy{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(5,7,10,.55);font-family:var(--f-display);font-size:20px;letter-spacing:.12em;font-weight:700;text-align:center;padding:16px}
+@media (prefers-reduced-motion:reduce){#banner,#steerRail{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- ============ HUD ============ -->
+<div id="tower" class="hud panel">
+  <div class="t-row"><span class="lapchip">LAP <b id="lapNo">–</b></span><span id="lapTime">0:00.000</span></div>
+  <div class="t-row2"><span id="delta"></span><span id="lapState">準備</span></div>
+  <div class="sectors">
+    <div class="sec" id="s0">S1<span>–</span></div>
+    <div class="sec" id="s1">S2<span>–</span></div>
+    <div class="sec" id="s2">S3<span>–</span></div>
+  </div>
+  <dl class="rows">
+    <dt>BEST</dt><dd id="best">–</dd>
+    <dt class="dsk">LAST</dt><dd class="dsk" id="last">–</dd>
+    <dt class="dsk">賽道長度</dt><dd class="dsk" id="trkLen">–</dd>
+  </dl>
+</div>
+
+<div id="rightCol" class="hud">
+  <div id="hudBtns">
+    <button class="ibtn" id="bTele" type="button" aria-label="車輛數據"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
+    <button class="ibtn" id="bCam" type="button" aria-label="切換視角"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="ibtn" id="bReset" type="button" aria-label="回到賽道"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+    <button class="ibtn" id="menuBtn" type="button" aria-label="暫停"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></button>
+  </div>
+  <div id="mapBox" class="panel">
+    <div class="cap"><span>TRACK</span><span>DRS 區＝綠</span></div>
+    <canvas id="minimap"></canvas>
+    <div class="cap"><span>ELEVATION</span><span id="elevRange">–</span></div>
+    <canvas id="profile"></canvas>
+  </div>
+</div>
+
+<div id="tele" class="hud panel" hidden>
+  <canvas id="gmeter" aria-label="G 力圖"></canvas>
+  <dl class="tl">
+    <dt>胎溫 前/後</dt><dd id="tTyre">–</dd>
+    <dt>下壓力</dt><dd id="tDown">–</dd>
+    <dt>坡度</dt><dd id="tGrade">–</dd>
+    <dt>路面</dt><dd id="tSurf">–</dd>
+    <dt class="dsk">空氣阻力</dt><dd class="dsk" id="tDrag">–</dd>
+    <dt class="dsk">路面側傾</dt><dd class="dsk" id="tBank">–</dd>
+    <dt class="dsk">海拔</dt><dd class="dsk" id="tAlt">–</dd>
+    <dt class="dsk">空氣密度</dt><dd class="dsk" id="tRho">–</dd>
+    <dt class="dsk">輪荷 前/後</dt><dd class="dsk" id="tLoad">–</dd>
+  </dl>
+  <div class="slip">
+    <label>前輪滑移</label><div class="bar"><i id="bF"></i></div><output id="oF">0.0°</output>
+    <label>後輪滑移</label><div class="bar"><i id="bR"></i></div><output id="oR">0.0°</output>
+  </div>
+  <div id="balance">中性</div>
+</div>
+
+<div id="wheel" class="hud panel">
+  <div id="leds"></div>
+  <div class="pedals"><div class="pedal" id="pThr"><i></i></div><div class="pedal" id="pBrk"><i></i></div></div>
+  <div class="speed"><div id="spd">0</div><div class="unit">KM/H</div></div>
+  <div class="gearbox"><div id="gear">N</div><div id="rpm">0 RPM</div></div>
+  <div class="chips"><span class="chip" id="cDrs">DRS</span><span class="chip" id="cTc">TC</span><span class="chip" id="cAbs">ABS</span><span class="chip" id="cGb">AUTO</span></div>
+</div>
+
+<div id="standings" class="hud panel" hidden>
+  <div class="poshead"><b id="posBig">P1</b><span id="posOf">/1</span></div>
+  <ol class="posrows" id="posRows"></ol>
+</div>
+<div id="banner" class="hud"></div>
+<div id="lights" class="hud" hidden><i></i><i></i><i></i><i></i><i></i></div>
+<div id="hudCredit" class="hud"></div>
+
+<div id="touch" hidden>
+  <div id="steerZone">
+    <div id="steerRail"><i id="steerKnob"></i></div>
+    <div class="zhint">按住左右拖曳轉向</div>
+  </div>
+  <div id="steerBtns" hidden>
+    <div class="tbtn" id="tLeft">◀</div>
+    <div class="tbtn" id="tRight">▶</div>
+  </div>
+  <div id="shiftBtns" hidden>
+    <div class="tbtn" id="tDown">－</div>
+    <div class="tbtn" id="tUp">＋</div>
+  </div>
+  <div id="pedalZone">
+    <div class="tbtn" id="tDrs">DRS</div>
+    <div class="tbtn" id="tBrake">煞車</div>
+    <div class="tbtn" id="tGas">油門</div>
+  </div>
+</div>
+
+<!-- ============ Pause ============ -->
+<div id="pause" hidden>
+  <div class="pcard" role="dialog" aria-label="暫停">
+    <h2>暫停</h2>
+    <dl class="stats"><dt>圈數</dt><dd id="pLap">–</dd><dt>最快圈</dt><dd id="pBest">–</dd><dt>上一圈</dt><dd id="pLast">–</dd></dl>
+    <button class="primary" id="pResume" type="button">繼續</button>
+    <button class="btn" id="pRestart" type="button">重新起跑</button>
+    <button class="btn" id="pSetup" type="button">賽道與車輛設定</button>
+  </div>
+</div>
+
+<div id="results" hidden>
+  <div class="pcard rcard" role="dialog" aria-label="比賽結果">
+    <h2>比賽結果</h2>
+    <p class="hint" id="resTitle"></p>
+    <div class="rtable"><table><thead><tr><th>名次</th><th></th><th>車手</th><th>時間</th><th>最快圈</th></tr></thead><tbody id="resRows"></tbody></table></div>
+    <button class="primary" id="resAgain" type="button">再來一場</button>
+    <div class="btnrow" style="display:grid;grid-template-columns:1fr 1fr"><button class="btn" id="resWatch" type="button">關閉</button><button class="btn" id="resSetup" type="button">設定</button></div>
+  </div>
+</div>
+
+<!-- ============ Setup ============ -->
+<div id="setup">
+  <div class="sheet">
+    <header class="sh-head">
+      <div class="brand">TERRAIN <em>GP</em></div>
+      <p class="tagline">用高度圖、臺北實測地形或 OpenStreetMap 地圖當場景，點出賽道，再用接近 F1 規格的車輛物理去跑。坡度、海拔、空氣密度與胎溫都會改變速度與抓地力。</p>
+    </header>
+    <div class="sh-body">
+      <section class="mapcol">
+        <canvas id="editor" aria-label="賽道編輯地圖"></canvas>
+        <div class="btnrow">
+          <button class="btn" id="btnRand" type="button">隨機賽道</button>
+          <button class="btn" id="btnUndo" type="button">刪除一點</button>
+          <button class="btn" id="btnClear" type="button">清除重畫</button>
+          <button class="btn" id="btnRev" type="button">反向行駛</button>
+        </div>
+        <p class="hint" id="trackInfo">在地圖上依序點擊放置彎道控制點。</p>
+      </section>
+
+      <section class="opts">
+        <div class="steps" role="tablist">
+          <button class="step sel" data-pane="map" type="button" role="tab">地圖</button>
+          <button class="step" data-pane="track" type="button" role="tab">賽道</button>
+          <button class="step" data-pane="car" type="button" role="tab">賽車</button>
+          <button class="step" data-pane="race" type="button" role="tab">對手</button>
+          <button class="step" data-pane="play" type="button" role="tab">操作</button>
+        </div>
+
+        <div class="pane" data-pane="map">
+          <div class="group">
+            <h3>地圖來源</h3>
+            <div class="seg" id="mapTabs" role="tablist">
+              <button class="tab sel" data-m="terrain" type="button" role="tab">自訂地形</button>
+              <button class="tab" data-m="taipei" type="button" role="tab">臺北街道賽</button>
+              <button class="tab" data-m="osm" type="button" role="tab">匯入 OSM</button>
+            </div>
+          </div>
+          <div class="group" id="taipeiOpts" hidden>
+            <p class="hint">萬華、中正、大安一帶 5.6 × 4.2 km：內政部 20 m 實測 DEM、12,626 棟 3D 建物與 OpenStreetMap 道路。點地圖放置的點會吸附到真實路口，路線沿實際街道走。</p>
+          </div>
+          <div class="group" id="osmOpts" hidden>
+            <div class="drop" id="osmDrop">
+              <div class="upload"><label class="btn" for="osmFile">選擇 .osm 檔…</label><input type="file" id="osmFile" accept=".osm,.xml,application/xml,text/xml"></div>
+              <div id="osmInfo">到 openstreetmap.org 按「匯出」，框選 2–4 km 寬的範圍並下載 .osm 檔，再在這裡選擇（電腦上也可直接拖放）。會讀取道路、建物（含高度或樓層數）與水域；地形為平地。</div>
+            </div>
+          </div>
+          <div class="group" id="terrainOpts">
+            <div class="btnrow" id="presets">
+              <button class="btn sel" data-p="hills" type="button">丘陵</button>
+              <button class="btn" data-p="mountain" type="button">山脈峽谷</button>
+              <button class="btn" data-p="plateau" type="button">高原 2240m</button>
+              <button class="btn" data-p="flat" type="button">平原</button>
+            </div>
+            <div class="drop" id="drop">
+              <div class="upload">
+                <label class="btn" for="file">匯入高度圖…</label>
+                <input type="file" id="file" accept="image/*">
+                <select id="enc" aria-label="高度編碼">
+                  <option value="gray">灰階（白＝高）</option>
+                  <option value="terrarium">Terrarium RGB（公尺）</option>
+                </select>
+              </div>
+              <label class="checks"><span style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="invert">反轉高低</span></label>
+              <div id="fileInfo">PNG / JPG 皆可。Terrarium 編碼的真實地形圖磚會讀出實際海拔。</div>
+            </div>
+            <div class="field"><label for="size">地圖邊長</label><input type="range" id="size" min="1000" max="6000" step="100" value="2400"><output id="oSize"></output></div>
+            <div class="field"><label for="range">高低差</label><input type="range" id="range" min="0" max="500" step="5" value="90"><output id="oRange"></output></div>
+          </div>
+          <div class="field" id="baseField"><label for="base">基準海拔</label><input type="range" id="base" min="0" max="4000" step="10" value="150"><output id="oBase"></output></div>
+          <p class="hint credit" id="mapCredit" hidden></p>
+        </div>
+
+        <div class="pane" data-pane="track" hidden>
+          <div class="group" id="tpPresetGroup" hidden>
+            <h3>臺北預設環線</h3>
+            <div class="btnrow" id="tpPresets">
+              <button class="btn" data-c="0" type="button">中正紀念堂環線</button>
+              <button class="btn" data-c="1" type="button">萬華艋舺環線</button>
+              <button class="btn" data-c="2" type="button">大安仁愛短程</button>
+            </div>
+          </div>
+          <div class="group">
+            <h3>賽道</h3>
+            <div class="field"><label for="width">賽道寬度</label><input type="range" id="width" min="10" max="20" step="1" value="14"><output id="oWidth"></output></div>
+            <div class="checks">
+              <label><input type="checkbox" id="banking" checked>保留地形橫向傾斜（自然側傾彎）</label>
+              <label><input type="checkbox" id="walls" checked>賽道護欄（街道賽：水泥護欄與防護網；一般賽道：護欄與輪胎牆）</label>
+            </div>
+          </div>
+          <p class="hint">在左邊（直向時在上方）的地圖上點擊放點、拖曳調整。藍色箭頭是起跑線與行駛方向。</p>
+        </div>
+
+        <div class="pane" data-pane="car" hidden>
+          <div class="group">
+            <h3>空力與底盤</h3>
+            <div class="field"><label for="aero">尾翼角度</label><input type="range" id="aero" min="0" max="1" step="0.05" value="0.5"><output id="oAero"></output></div>
+            <div class="aerohint" id="aeroHint"></div>
+            <div class="field"><label for="bias">煞車平衡</label><input type="range" id="bias" min="50" max="64" step="0.5" value="57"><output id="oBias"></output></div>
+          </div>
+          <div class="group">
+            <h3>駕駛輔助</h3>
+            <div class="checks">
+              <label><input type="checkbox" id="tc" checked>循跡控制 TC</label>
+              <label><input type="checkbox" id="abs" checked>防鎖死 ABS</label>
+              <label><input type="checkbox" id="auto" checked>自動換檔</label>
+              <label><input type="checkbox" id="assist" checked>轉向輔助（甩尾自動反打）</label>
+            </div>
+          </div>
+          <div class="group">
+            <h3>車身顏色</h3>
+            <div class="swatches" id="swatches" aria-label="車身顏色"></div>
+          </div>
+        </div>
+
+        <div class="pane" data-pane="race" hidden>
+          <div class="group">
+            <h3>比賽模式</h3>
+            <div class="seg" id="raceMode">
+              <button class="sel" data-r="solo" type="button">單人計時</button>
+              <button data-r="ai" type="button">電腦對手</button>
+              <button data-r="online" type="button">線上對戰</button>
+            </div>
+          </div>
+          <div class="group" id="lapsGroup" hidden>
+            <div class="field"><label for="laps">比賽圈數</label><input type="range" id="laps" min="1" max="20" step="1" value="3"><output id="oLaps"></output></div>
+          </div>
+          <div class="group" id="aiGroup" hidden>
+            <div class="field"><label for="aiCount">電腦車數</label><input type="range" id="aiCount" min="1" max="9" step="1" value="5"><output id="oAiCount"></output></div>
+            <div class="field"><label for="aiSkill">電腦強度</label><input type="range" id="aiSkill" min="0" max="1" step="0.05" value="0.45"><output id="oAiSkill"></output></div>
+            <p class="hint">你從車陣中段的格位起跑。電腦車手會依彎道曲率與下壓力決定進彎速度，也會找空間超車；碰撞時你的車會被推開。</p>
+          </div>
+          <div class="group" id="netGroup" hidden>
+            <label class="textfield"><span>暱稱</span><input type="text" id="nick" maxlength="12" autocomplete="nickname" placeholder="車手"></label>
+            <p class="hint" id="netOff">這個檢視無法連線多人房間。線上對戰需要以 claude.ai 帳號登入，並由頁面擁有者把這個頁面分享給你；用公開連結開啟時無法連線。仍可選「電腦對手」。</p>
+            <div class="netrow" id="netJoinRow" hidden>
+              <button class="btn" id="netCreate" type="button">建立房間</button>
+              <input type="text" id="netCode" maxlength="10" placeholder="房間代碼" autocapitalize="off" autocomplete="off" spellcheck="false" aria-label="房間代碼">
+              <button class="btn" id="netJoin" type="button">加入</button>
+            </div>
+            <div id="netRoom" hidden>
+              <div class="roomhead"><span>房間 <b id="netCodeShow"></b></span><button class="btn" id="netCopy" type="button">複製代碼</button><button class="btn" id="netLeave" type="button">離開</button></div>
+              <ul class="roster" id="roster"></ul>
+            </div>
+            <p class="hint" id="netHint"></p>
+          </div>
+        </div>
+
+        <div class="pane" data-pane="play" hidden>
+          <div class="group only-touch">
+            <h3>觸控操作</h3>
+            <div class="seg" id="steerMode" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+              <button class="sel" data-s="drag" type="button">拖曳轉向</button>
+              <button data-s="buttons" type="button">左右按鈕</button>
+            </div>
+            <ol class="howto">
+              <li><b>拖曳轉向</b>：手指按在螢幕左半部，往左右拖，拖越遠轉越多。</li>
+              <li><b>右下角</b>：綠色是油門、紅色是煞車；停車後按住煞車會切換倒車。</li>
+              <li><b>DRS</b>：直線上的綠色區段亮起時可按，踩煞車會自動關閉。</li>
+              <li><b>升／降檔</b>：關閉「自動換檔」後，油門上方會出現 ＋／－ 換檔鍵。</li>
+              <li><b>右上角</b>：車輛數據、切換視角、回到賽道、暫停。</li>
+            </ol>
+          </div>
+          <div class="group only-desk">
+            <h3>鍵盤與手把</h3>
+            <div class="keys">
+              <span><kbd>↑</kbd>/<kbd>W</kbd> 油門</span><span><kbd>↓</kbd>/<kbd>S</kbd> 煞車（停車後倒車）</span><span><kbd>←</kbd><kbd>→</kbd>/<kbd>A</kbd><kbd>D</kbd> 轉向</span>
+              <span><kbd>空白</kbd> DRS</span><span><kbd>Q</kbd>/<kbd>E</kbd> 降/升檔</span><span><kbd>C</kbd> 視角</span><span><kbd>R</kbd> 回到賽道</span><span><kbd>M</kbd> 靜音</span><span><kbd>Esc</kbd> 暫停</span><span>遊戲手把：RT 油門、LT 煞車</span>
+            </div>
+          </div>
+          <div class="group">
+            <h3>手感</h3>
+            <div class="field"><label for="steer">轉向靈敏度</label><input type="range" id="steer" min="0.4" max="1.3" step="0.05" value="0.8"><output id="oSteer"></output></div>
+            <div class="checks">
+              <label><input type="checkbox" id="touchOn">顯示觸控按鍵（平板、觸控筆電可手動開啟）</label>
+              <label><input type="checkbox" id="autogas">自動油門（只需操作轉向與煞車）</label>
+              <label><input type="checkbox" id="sound" checked>引擎音效</label>
+            </div>
+          </div>
+          <div class="group">
+            <h3>畫面</h3>
+            <div class="seg" id="quality" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+              <button class="sel" data-q="auto" type="button">自動</button>
+              <button data-q="high" type="button">高</button>
+              <button data-q="mid" type="button">中</button>
+              <button data-q="low" type="button">低</button>
+            </div>
+            <p class="hint">「自動」會在開跑後偵測幀率，太低時自動關閉陰影與降低解析度。</p>
+            <button class="btn" id="btnFull" type="button" hidden>全螢幕遊玩</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <footer class="sh-foot">
+      <span class="status" id="footStatus"></span>
+      <button class="btn" id="btnResume" type="button" hidden>繼續</button>
+      <button class="primary" id="btnStart" type="button">開始比賽</button>
+    </footer>
+  </div>
+</div>
+<div id="busy" hidden>生成地形中…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="game.js" charset="utf-8"></script>
+</body>
+</html>
