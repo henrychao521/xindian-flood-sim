@@ -142,7 +142,7 @@ while hq:
         jj, ii = j + dj, i + di
         if 0 <= jj < ny and 0 <= ii < nx and not done[jj, ii]:
             done[jj, ii] = True; F[jj, ii] = max(F[jj, ii], h); heapq.heappush(hq, (F[jj, ii], jj, ii))
-hill = inland & (Zi > fillAbove)
+hill = inland & (F > fillAbove) & (F > Zi)  # 溢流高程在堤頂以上的窪地整個填平（含谷底）；堤內平地的窪地溢流高程不超過堤頂，保留
 filled_cells = int((F[hill] > Zi[hill] + 0.01).sum())
 Zi[hill] = F[hill]
 
