@@ -237,7 +237,7 @@ function inundCompare() {
     if (o) off++; if (m) mod++; if (o && m) both++;
   }
   const hit = off ? Math.round(both / off * 100) : 0, iou = (off + mod - both) ? (both / (off + mod - both)).toFixed(2) : "—";
-  return `${hhmm(frames[tIdx].t)}：本情境堤內積水 ≥ 0.15 m <b class="num">${(mod * A).toFixed(0)}</b> 公頃；官方 ${inundCaseKey()} mm/h 圖 <b class="num">${(off * A).toFixed(0)}</b> 公頃；官方積水格中本模型也積水的比例 <b class="num">${hit}%</b>，IoU <b class="num">${iou}</b>。面積量級可比，位置重疊通常只有一到三成（20 m 網格與集總式下水道抓不到街道尺度低點）。`;
+  return `${hhmm(frames[tIdx].t)}：本情境堤內積水 ≥ 0.15 m <b class="num">${(mod * A).toFixed(0)}</b> 公頃；官方 ${inundCaseKey()} mm/h 圖 <b class="num">${(off * A).toFixed(0)}</b> 公頃；官方積水格中本模型也積水的比例 <b class="num">${hit}%</b>，IoU <b class="num">${iou}</b>。面積量級可比，位置重疊通常不到兩成（20 m 網格與集總式下水道抓不到街道尺度低點，山區也沒有排水溪流）。`;
 }
 function inundLabel(k) {
   if (!inundOn()) return "";

@@ -71,12 +71,12 @@ for r in regs:
     stats = (f'<dl><div><dt>堤內面積</dt><dd class="num">{r["inland_km2"]} km²</dd></div><div><dt>{gate_word}</dt><dd class="num">{r["gates"]}</dd></div>'
              f'<div><dt>抽水站</dt><dd class="num">{r["pumps"]}</dd></div></dl>'
              + (f'<dl class="res"><div><dt>{esc(res.get("keyopen_label", res["keyGate"] + "未關（計畫洪峰 80%，4 h）"))}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
-                f'<div><dt>時雨量 110 mm（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
+                f'<div><dt>時雨量 110 mm・1 小時（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
              + (f'<dl class="res"><div><dt>短延時 100 mm/h：本模型／水利處圖</dt><dd class="num">{r["compare"]["100"]["model_ha"]:.0f}／{r["compare"]["100"]["official_ha"]:.0f} ha</dd><dt>・命中</dt><dd class="num">{(r["compare"]["100"]["hit_rate"] or 0) * 100:.0f}%</dd></div></dl>' if r.get("compare", {}).get("100") else "")
              ) if "inland_km2" in r else \
             ('<dl><div><dt>特色</dt><dd>本專案起點：颱風預報換算、五座疏散門、示範影片</dd></div></dl>'
              + (f'<dl class="res"><div><dt>{esc(res["keyopen_label"])}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
-                f'<div><dt>時雨量 110 mm（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
+                f'<div><dt>時雨量 110 mm・1 小時（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
              + (f'<dl class="res"><div><dt>短延時 100 mm/h：本模型／水利處圖</dt><dd class="num">{r["compare"]["100"]["model_ha"]:.0f}／{r["compare"]["100"]["official_ha"]:.0f} ha</dd><dt>・命中</dt><dd class="num">{(r["compare"]["100"]["hit_rate"] or 0) * 100:.0f}%</dd></div></dl>' if r.get("compare", {}).get("100") else ""))
     cards.append(f'''      <a class="card" href="{r["href"]}">
         <h2>{esc(r["title"])}</h2>
@@ -160,7 +160,7 @@ footer a, .notes a {{ color: var(--accent); }}
       <li>堤內淹水以二維局部慣性淺水波法計算，排水系統依臺北市雨水下水道與抽水站設計標準。</li>
       <li>雨型是以 T+3 h 為中心、長度等於「降雨延時」的定強度降雨；「時雨量 110 mm」情境是 1 小時。每個頁面都可疊上臺北市水利處「降雨積水模擬圖」（112 年版）對照。</li>
       <li>各河段範圍邊界視為封閉，相鄰河段之間的水不互通。</li>
-      <li>卡片上的公頃數是固定情境在 4 小時時的堤內淹水面積（水深 ≥ 0.1 m），用來比較各河段的相對規模，不是淹水潛勢圖。「短延時 100 mm/h」一列是本模型與臺北市水利處降雨積水模擬圖（112 年版）的對照：面積量級相近，但位置命中率只有一到三成，街道尺度的積水點請看各頁面的疊圖。</li>
+      <li>卡片上的公頃數是固定情境在 4 小時時的堤內淹水面積（水深 ≥ 0.1 m），用來比較各河段的相對規模，不是淹水潛勢圖。「短延時 100 mm/h」一列是本模型與臺北市水利處降雨積水模擬圖（112 年版）的對照：平地河段面積量級相近、山區河段偏高，位置命中率多在兩成以下，街道尺度的積水點請看各頁面的疊圖。</li>
     </ul>
   </section>
   <footer>
