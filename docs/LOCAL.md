@@ -1,0 +1,66 @@
+# 在本機接手這個專案
+
+適用於在自己電腦上用 Claude Code（桌面版或終端機）或單純手動操作。分三部分：環境、常用指令、給 Claude 的開場提示。
+
+## 1. 準備環境（一次）
+
+```bash
+git clone https://github.com/henrychao521/xindian-flood-sim.git
+cd xindian-flood-sim
+
+# Python 3.10+
+python3 -m pip install numpy scipy pyproj matplotlib
+
+# Node 18+，Playwright（headless Chromium 跑情境檢查用）
+npm i -g playwright@1.56.1
+npx playwright install chromium
+
+# three.js 本機副本（離線測試頁用；正式頁面用 CDN）
+mkdir -p vendor
+curl -sSL -o vendor/three.min.js https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js
+curl -sSL -o vendor/OrbitControls.js https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js
+
+# 建物資料（sheethub/tpe3d，72 MB）與全市 DEM 拼接
+git clone --depth 1 https://github.com/sheethub/tpe3d /tmp/tpe3d
+mkdir -p work/tpe3d && cp /tmp/tpe3d/geojsons/*.json work/tpe3d/
+python3 scripts/mosaic.py          # → work/taipei_dem20.npz
+```
+
+`work/`、`vendor/` 都在 `.gitignore`，不會進 repo。OSM 分塊會在第一次跑 `build_region.py` 時從 OSM API 下載到 `work/<id>/osm/`（全部約 1.3 GB，之後重用）。
+
+## 2. 常用指令
+
+| 目的 | 指令 |
+|---|---|
+| 只改頁面程式（`src/`）後重建 | `python3 src/make_region_template.py && python3 src/build.py && for r in tamsui shilin zhongshan neihu jingmei beitou; do python3 src/build.py --region $r; done` |
+| 改某河段設定（`regions/<id>.json`）後重做資料 | `python3 scripts/build_region.py <id> --plot` → 看 `work/<id>/check.png`，再 `python3 scripts/mask_plot.py <id>` |
+| 全部重跑＋情境檢查＋對照＋總覽 | `bash scripts/run_checks.sh`（單一河段：`bash scripts/run_checks.sh tamsui`） |
+| 新店溪回歸測試（水門水理不變） | `node tests/regress.js <舊版html> <新版html>`，期望 `SAME` |
+| 結果表 | `python3 scripts/results_table.py` |
+| 本機預覽 | `python3 -m http.server 8080` → http://localhost:8080/overview/ |
+
+推上 `main` 後 GitHub Pages 約一兩分鐘更新。
+
+## 3. 給本機 Claude 的開場提示（直接貼）
+
+```
+這個 repo 是臺北市河川淹水模擬器（7 個河段的靜態頁面＋前處理腳本）。
+先讀 README.md 和 docs/STAGES.md，STAGES 記錄了每個階段的做法、修正與目前限制。
+規則：
+- 改 src/ 之後要重建所有頁面（README「重建」一節的指令），改 regions/ 之後要跑 scripts/build_region.py 並看 work/<id>/check.png。
+- 任何模型改動都要跑 bash scripts/run_checks.sh（或單一河段），確認 errors [] 與 mobile sw 400，再把結果寫進 docs/STAGES.md 新階段。
+- 每個階段完成就 commit 並 push 到 main；資料備份在 data/raw 與 data/processed。
+- 不要把 PDF 或 OSM 原始檔放進 repo。
+目前的下一步候選：（1）山區河段加入排水溪流（磺溪、內溝溪、雙溪）讓降雨積水不致高估；（2）用更細的地形（5 m DEM）重做街道低點；（3）歷史事件（2001 納莉颱風）情境。
+```
+
+## 4. Colab
+
+Colab 無法從本機的 Claude 直接呼叫（沒有 API）。流程是：本機 Claude 推 repo → 在瀏覽器開 `colab/run_all.ipynb`（[Colab 連結](https://colab.research.google.com/github/henrychao521/xindian-flood-sim/blob/main/colab/run_all.ipynb)）跑 → 結果推到分支 `colab-results` → 本機 Claude 拉回來看。若用 Claude 桌面版並裝了 Claude in Chrome，可以請它在 Chrome 裡開 Colab 連結、按「全部執行」並回報輸出，但儲存格內容與秘密（`GH_TOKEN`）仍要自己設定。
+
+## 5. 連結
+
+- 線上總覽：https://henrychao521.github.io/xindian-flood-sim/overview/
+- 新店溪（起點）：https://henrychao521.github.io/xindian-flood-sim/
+- 原始碼：https://github.com/henrychao521/xindian-flood-sim
+- 作品站卡片：https://henrychao521.github.io

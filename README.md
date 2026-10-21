@@ -15,7 +15,7 @@
 | 景美溪 | [`/jingmei/`](https://henrychao521.github.io/xindian-flood-sim/jingmei/) | 景美、木柵 |
 | 基隆河出海段 | [`/beitou/`](https://henrychao521.github.io/xindian-flood-sim/beitou/) | 北投、關渡 |
 
-各階段的做法、修正與情境結果記在 [`docs/STAGES.md`](docs/STAGES.md)。
+各階段的做法、修正與情境結果記在 [`docs/STAGES.md`](docs/STAGES.md)；在本機接手的環境與指令見 [`docs/LOCAL.md`](docs/LOCAL.md)。
 
 ## 重建
 
