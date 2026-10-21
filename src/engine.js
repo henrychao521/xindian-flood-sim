@@ -14,11 +14,14 @@ function hydroShape(t) { // 0→1：2 h 上升、2–4 h 洪峰、之後退水
 function qAbs(fr) { return REGION.qDesign ? fr.Q / 100 * REGION.qDesign : fr.Q; }
 function qLabel(q) { return REGION.qDesign ? `${Math.round(q)}% 計畫流量` : `${Math.round(q).toLocaleString("zh-TW")} m³/s`; }
 
-// 設計雨型：高斯形單峰，峰值在 T+3 h，寬度由「降雨延時」決定，使總雨量＝峰值強度 × 延時
-// （舊版另加全程 15% 的底雨，8 小時下來多出一百多毫米，和水利處的短延時模擬圖對照後拿掉）
+// 設計雨型：以 T+3 h 為中心、長度＝「降雨延時」的定強度降雨，前後各 15 分鐘平滑起迄，總雨量＝峰值強度 × 延時
+// （「時雨量 100 mm、延時 1 小時」就是整整一小時 100 mm/h；舊版高斯形的峰值只維持一瞬間，另加全程 15% 底雨，
+//   和水利處的短延時模擬圖對照後都改掉）
 function rainShape(t, hours = 2) {
-  const sigma = hours / Math.sqrt(Math.PI);
-  return Math.exp(-(((t - 3) / sigma) ** 2));
+  const half = hours / 2, ramp = 0.25, d = Math.abs(t - 3);
+  if (d <= half - ramp) return 1;
+  if (d >= half + ramp) return 0;
+  return 0.5 * (1 + Math.cos(Math.PI * (d - (half - ramp)) / (2 * ramp)));
 }
 
 

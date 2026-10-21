@@ -36,6 +36,8 @@ scripts/run_checks.sh [id …]              # 以上全部＋tests/region_check.
 - 二維局部慣性淺水波水流（Bates et al., 2010），建物以孔隙率法處理
 - 雨水下水道（78.8 mm/hr）與抽水站（45–60 mm/hr）排水模型
 - OpenStreetMap 道路、橋樑、公共設施淹水狀態
+- 疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足
+- 可疊上臺北市水利處「降雨積水模擬圖」（112 年版，78.8／100／130 mm/h）對照；`scripts/compare_inundation.py` 計算面積、命中率與 IoU
 - 颱風預報換算（合理化公式估算新店溪洪峰，只有新店溪頁面）
 - 疏散門缺少 OSM 資料的河段，依道路穿越堤線處推定位置（頁面上註明）
 
@@ -44,6 +46,8 @@ scripts/run_checks.sh [id …]              # 以上全部＋tests/region_check.
 - 地形：內政部國土測繪中心 2025 年 20 m DEM，政府資料開放授權條款第 1 版
 - 建物：臺北市自動化 3D 近似建物模型，經 [sheethub/tpe3d](https://github.com/sheethub/tpe3d) 轉換
 - 抽水站：臺北市水利處抽水站（data.gov.tw 資料集 143901）
+- 疏散門：臺北市水利處「臺北市疏散門資訊」（data.taipei，政府資料開放授權條款第 1 版）
+- 降雨積水模擬圖：臺北市政府工務局水利工程處「臺北市降雨積水模擬圖（112 年更新版）」（data.gov.tw 資料集 121550，政府資料開放授權條款第 1 版）
 - 道路、橋樑、設施、疏散門：© OpenStreetMap contributors，ODbL
 - 3D 繪圖：three.js（MIT）
 
