@@ -189,6 +189,7 @@ function renderContour(fr) {
   drawBuildingsOnMap(g, fr);
   drawOSMOnMap(g, waterLevels(fr));
   drawInundOverlay(g, W, H);  // 疊在道路與建物之上，官方積水格多半在街道上
+  const ic = $("inundCmp"); if (ic) { ic.innerHTML = inundCompare(); ic.hidden = !ic.innerHTML; }
   (REGION.mapLabels || []).forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
   const [lx, ly] = cellToCanvas(DEM_DATA.low[0], DEM_DATA.low[1]);
   g.strokeStyle = "#1a1a1a"; g.lineWidth = 2; g.beginPath(); g.arc(lx, ly, 7, 0, Math.PI * 2); g.stroke();
@@ -222,6 +223,21 @@ function drawInundOverlay(g, W, H) {
     img.data[p] = 190; img.data[p + 1] = 40; img.data[p + 2] = 150; img.data[p + 3] = Math.min(230, 90 + (c - 2) * 45);
   }
   octx.putImageData(img, 0, 0); g.imageSmoothingEnabled = false; g.drawImage(oc, 0, 0, W, H);
+}
+// 目前情境、目前時刻的堤內積水（≥ 0.15 m）與官方模擬圖的比較
+function inundCompare() {
+  if (!inundOn()) return "";
+  const grid = inundCells(inundCaseKey()); if (!grid) return "";
+  if (!FLOW.result) return "二維水流計算完成後，這裡會顯示本情境與官方模擬圖的面積、命中率比較。";
+  const L = FLOW.result.h.length - 1, h = FLOW.result.h[Math.min(tIdx, L)], A = DEM.d * DEM.d / 1e4;
+  let off = 0, mod = 0, both = 0;
+  for (let k = 0; k < h.length; k++) {
+    if (DEM.mask[k] !== 1) continue;
+    const o = grid[k] >= 2, m = h[k] >= 0.15;
+    if (o) off++; if (m) mod++; if (o && m) both++;
+  }
+  const hit = off ? Math.round(both / off * 100) : 0, iou = (off + mod - both) ? (both / (off + mod - both)).toFixed(2) : "—";
+  return `${hhmm(frames[tIdx].t)}：本情境堤內積水 ≥ 0.15 m <b class="num">${(mod * A).toFixed(0)}</b> 公頃；官方 ${inundCaseKey()} mm/h 圖 <b class="num">${(off * A).toFixed(0)}</b> 公頃；官方積水格中本模型也積水的比例 <b class="num">${hit}%</b>，IoU <b class="num">${iou}</b>。面積量級可比，位置重疊通常只有一到三成（20 m 網格與集總式下水道抓不到街道尺度低點）。`;
 }
 function inundLabel(k) {
   if (!inundOn()) return "";

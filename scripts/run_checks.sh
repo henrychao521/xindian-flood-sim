@@ -23,5 +23,6 @@ for r in $REGIONS; do
 done
 python3 "$ROOT/scripts/overview_map.py"
 for r in $REGIONS; do  # 與水利處降雨積水模擬圖比對（最後一個情境＝短延時 100 mm/h）
-  python3 -I "$ROOT/scripts/compare_inundation.py" "$r" "$TMP/t_${r}_stats.json" 100
+  for c in 100 130; do python3 -I "$ROOT/scripts/compare_inundation.py" "$r" "$TMP/t_${r}_stats.json" $c; done
 done
+python3 "$ROOT/scripts/overview_map.py"  # 卡片上的對照數字來自 compare_*.json

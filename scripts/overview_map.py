@@ -12,6 +12,8 @@ ny, nx = G.shape
 dw = json.loads((ROOT / "data/processed/demW.json").read_text())
 regs = [{"id": "xindian", "href": "../", "title": "新店溪（萬華・中正・大安）", "river": "新店溪",
          "bbox": [dw["x0"], dw["y0"], dw["x0"] + dw["nx"] * dw["d"], dw["y0"] + dw["ny"] * dw["d"]]}]
+xc = ROOT / "data/processed/xindian/compare_100.json"
+if xc.exists(): regs[0]["compare"] = {"100": json.loads(xc.read_text(encoding="utf-8"))["ge15cm"]}
 xr = ROOT / "data/processed/xindian/results.json"  # 新店溪頁面：PRESETS=pdf,rain 跑 tests/region_check.js 的結果
 if xr.exists():
     rs = json.loads(xr.read_text(encoding="utf-8"))
@@ -24,6 +26,11 @@ for rid in ["tamsui", "shilin", "zhongshan", "neihu", "jingmei", "beitou"]:
     s = json.loads((ROOT / f"data/processed/{rid}/summary.json").read_text(encoding="utf-8"))
     rec = {"id": rid, "href": f"../{rid}/", "title": c["title"].replace("淹水模擬器", ""), "river": c["river"], "districts": c["districts"],
            "bbox": c["bbox"], "inland_km2": s["inland_km2"], "gates": len(s["gates"]), "pumps": len(s["pumps"]), "auto_gates": s.get("auto_gates", 0)}
+    cmp = {}
+    for case in ("100", "130"):  # scripts/compare_inundation.py：短延時情境 vs 水利處降雨積水模擬圖
+        cf = ROOT / f"data/processed/{rid}/compare_{case}.json"
+        if cf.exists(): cmp[case] = json.loads(cf.read_text(encoding="utf-8"))["ge15cm"]
+    if cmp: rec["compare"] = cmp
     rf = ROOT / f"data/processed/{rid}/results.json"  # tests/region_check.js 的情境結果（4 小時）
     if rf.exists():
         rs = json.loads(rf.read_text(encoding="utf-8"))
@@ -65,10 +72,12 @@ for r in regs:
              f'<div><dt>抽水站</dt><dd class="num">{r["pumps"]}</dd></div></dl>'
              + (f'<dl class="res"><div><dt>{esc(res.get("keyopen_label", res["keyGate"] + "未關（計畫洪峰 80%，4 h）"))}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
                 f'<div><dt>時雨量 110 mm（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
+             + (f'<dl class="res"><div><dt>短延時 100 mm/h：本模型／水利處圖</dt><dd class="num">{r["compare"]["100"]["model_ha"]:.0f}／{r["compare"]["100"]["official_ha"]:.0f} ha</dd><dt>・命中</dt><dd class="num">{(r["compare"]["100"]["hit_rate"] or 0) * 100:.0f}%</dd></div></dl>' if r.get("compare", {}).get("100") else "")
              ) if "inland_km2" in r else \
             ('<dl><div><dt>特色</dt><dd>本專案起點：颱風預報換算、五座疏散門、示範影片</dd></div></dl>'
              + (f'<dl class="res"><div><dt>{esc(res["keyopen_label"])}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
-                f'<div><dt>時雨量 110 mm（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else ""))
+                f'<div><dt>時雨量 110 mm（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
+             + (f'<dl class="res"><div><dt>短延時 100 mm/h：本模型／水利處圖</dt><dd class="num">{r["compare"]["100"]["model_ha"]:.0f}／{r["compare"]["100"]["official_ha"]:.0f} ha</dd><dt>・命中</dt><dd class="num">{(r["compare"]["100"]["hit_rate"] or 0) * 100:.0f}%</dd></div></dl>' if r.get("compare", {}).get("100") else ""))
     cards.append(f'''      <a class="card" href="{r["href"]}">
         <h2>{esc(r["title"])}</h2>
         <p>{esc(r.get("districts", "萬華、中正、大安"))}・{esc(r["river"])}</p>
@@ -150,7 +159,7 @@ footer a, .notes a {{ color: var(--accent); }}
       <li>疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足；士林・社子與北投・關渡兩份資料都沒有疏散門，頁面上的「水門」是依道路穿越堤線處設定的假想缺口。</li>
       <li>堤內淹水以二維局部慣性淺水波法計算，排水系統依臺北市雨水下水道與抽水站設計標準。</li>
       <li>各河段範圍邊界視為封閉，相鄰河段之間的水不互通。</li>
-      <li>卡片上的公頃數是固定情境在 4 小時時的堤內淹水面積（水深 ≥ 0.1 m），用來比較各河段的相對規模，不是淹水潛勢圖。</li>
+      <li>卡片上的公頃數是固定情境在 4 小時時的堤內淹水面積（水深 ≥ 0.1 m），用來比較各河段的相對規模，不是淹水潛勢圖。「短延時 100 mm/h」一列是本模型與臺北市水利處降雨積水模擬圖（112 年版）的對照：面積量級相近，但位置命中率只有一到三成，街道尺度的積水點請看各頁面的疊圖。</li>
     </ul>
   </section>
   <footer>

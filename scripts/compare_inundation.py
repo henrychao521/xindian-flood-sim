@@ -1,7 +1,7 @@
 """模型的降雨情境 vs 臺北市水利處降雨積水模擬圖（112 年版）
 輸入：tests/region_check.js 產生的 <prefix>_stats.json（含 rain_depth_cm_b64，4 小時時的堤內水深）、data/processed/<id>/inund.json
 用法：python3 scripts/compare_inundation.py <id> <stats.json> [case=100]
-輸出：面積、重疊率（IoU）、命中率（官方積水格中模型也積水的比例）、誤報率，並寫入 data/processed/<id>/compare.json
+輸出：面積、重疊率（IoU）、命中率（官方積水格中模型也積水的比例）、誤報率，並寫入 data/processed/<id>/compare_<case>.json
 """
 import sys, json, base64, pathlib, numpy as np
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -24,5 +24,5 @@ for thr, key in ((0.15, "ge15cm"), (0.5, "ge50cm")):
                 "iou": round(inter / union, 3) if union else None,
                 "hit_rate": round(inter / off_m.sum(), 3) if off_m.sum() else None,   # 官方積水處模型也積水
                 "false_alarm": round(1 - inter / mod_m.sum(), 3) if mod_m.sum() else None}  # 模型積水但官方沒有
-(ROOT / f"data/processed/{rid}/compare.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+(ROOT / f"data/processed/{rid}/compare_{case}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
 print(rid, json.dumps(out, ensure_ascii=False))

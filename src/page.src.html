@@ -315,6 +315,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
             <div class="info-line" id="contourInfo"></div>
             <div class="legend"><span><i style="background:#123f9e;height:8px"></i>堤內積水（越深越濃）</span><span><i style="background:rgb(120,200,235);height:8px"></i>堤外河道、高灘地</span></div>
             <div class="legend inund-ctl"><label class="check"><input type="checkbox" id="showInund"> 疊上臺北市水利處「降雨積水模擬圖」（112 年版）</label><select id="inundCase" aria-label="模擬圖降雨情境"><option value="78.8">78.8 mm/h</option><option value="100" selected>100 mm/h</option><option value="130">130 mm/h</option></select><span><i style="background:rgb(190,40,150);opacity:.6;height:8px"></i>官方模擬積水 ≥ 0.15 m（越深越濃）</span></div>
+            <div class="hint" id="inundCmp" hidden></div>
             <div class="hint">水利處模擬圖是 1 小時短延時降雨、河道常水位、依實際雨水下水道網路計算的結果；要對照請選「短延時暴雨 100 mm/h」情境。資料：臺北市政府工務局水利工程處（data.taipei，政府資料開放授權條款第 1 版）。</div>
             <div class="ramp"><span>EL. 3 m</span><span class="ramp-bar"></span><span>8 m</span><span>・防洪牆為深灰色</span></div>
             <div class="legend"><span><i style="background:#2b2b2b;height:4px"></i>橋樑</span><span><i style="background:#5b2a86;height:8px;border-radius:50%"></i>公共設施</span><span><i style="background:#fff;height:8px;border:2px solid #555;width:8px"></i>其他疏散門（OSM）</span><span><i style="background:rgb(214,69,65);height:3px"></i>道路中斷</span><span><i style="background:rgb(242,153,74);height:3px"></i>道路危險</span></div>
