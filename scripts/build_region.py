@@ -248,7 +248,7 @@ if cfg.get("autoGates"):  # OSM 沒有疏散門資料時：道路由堤內穿過
         zin = np.median(Z[win][inland[win]]) if inland[win].any() else Z[j, i]
         zo = Z[win][(mask[win] == 0) & ~chan[win]]
         sill = round(float(max(zin, np.median(zo) if len(zo) else zin, pitFloor + 0.3)), 2)
-        gates.append({"name": f"{nm}門", "osm": "auto", "ref": "推定位置（道路穿越堤線處）", "cell": [i, j], "sill": sill})
+        gates.append({"name": f"{nm}門", "osm": "auto", "ref": "假想缺口（道路穿越堤線處；官方清單與 OSM 都沒有此門）", "cell": [i, j], "sill": sill})
 for g in gates: Zi[g["cell"][1], g["cell"][0]] = g["sill"]
 
 # ---------------- 5. 河段節點：常水位（DEM 水面）、計畫洪水位（堤頂 − 出水高）----------------
