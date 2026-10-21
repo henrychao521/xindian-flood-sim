@@ -16,7 +16,7 @@ if region:
     cfg = json.loads(r(ROOT / f"regions/{region}.json"))
     summ = json.loads(r(RD / "summary.json"))
     src = r(S / "region.src.html")
-    data = "const DEM_DATA=" + r(RD / "dem.json") + ";\nconst BLD_DATA=" + r(RD / "bld.json") + ";\nconst OSM_DATA=" + r(RD / "osm.json") + ";\n"
+    data = "const DEM_DATA=" + r(RD / "dem.json") + ";\nconst BLD_DATA=" + r(RD / "bld.json") + ";\nconst OSM_DATA=" + r(RD / "osm.json") + ";\nconst INUND_DATA=" + r(RD / "inund.json") + ";\n"
     regiondata = r(RD / "region_data.js")
     xa, ya, xb, yb = cfg["bbox"]
     gates_txt = "、".join(f"{g[0]}（底檻 EL. {g[2]:.1f} m）" for g in summ["gates"])
@@ -43,7 +43,7 @@ if region:
     out = pathlib.Path(args[0]) if args else ROOT / region / "index.html"
 else:
     src = r(S / "page.src.html")
-    data = "const DEM_DATA=" + r(D / "demW.json") + ";\nconst BLD_DATA=" + r(D / "bldW.json") + ";\nconst OSM_DATA=" + r(D / "osm2.json") + ";\n"
+    data = "const DEM_DATA=" + r(D / "demW.json") + ";\nconst BLD_DATA=" + r(D / "bldW.json") + ";\nconst OSM_DATA=" + r(D / "osm2.json") + ";\nconst INUND_DATA=" + r(D / "xindian/inund.json") + ";\n"
     regiondata = r(S / "xindian_data.js")
     ph = {"@@OVERVIEW@@": "overview/"}
     out = pathlib.Path(args[0]) if args else ROOT / "index.html"

@@ -14,8 +14,11 @@ function hydroShape(t) { // 0→1：2 h 上升、2–4 h 洪峰、之後退水
 function qAbs(fr) { return REGION.qDesign ? fr.Q / 100 * REGION.qDesign : fr.Q; }
 function qLabel(q) { return REGION.qDesign ? `${Math.round(q)}% 計畫流量` : `${Math.round(q).toLocaleString("zh-TW")} m³/s`; }
 
-function rainShape(t) { // 降雨集中在 T+2–4 h（高斯形峰值），其餘時間為峰值的 15%
-  return 0.15 + 0.85 * Math.exp(-(((t - 3) / 1.0) ** 2));
+// 設計雨型：高斯形單峰，峰值在 T+3 h，寬度由「降雨延時」決定，使總雨量＝峰值強度 × 延時
+// （舊版另加全程 15% 的底雨，8 小時下來多出一百多毫米，和水利處的短延時模擬圖對照後拿掉）
+function rainShape(t, hours = 2) {
+  const sigma = hours / Math.sqrt(Math.PI);
+  return Math.exp(-(((t - 3) / sigma) ** 2));
 }
 
 
@@ -70,7 +73,7 @@ function simulate(p) {
     const t = s * DT / 3600;
     const Qk = p.Qpeak / 1000 * hydroShape(t);
     const tide = p.tide * Math.cos(2 * Math.PI * (t - tp) / 12.42);
-    const rainNow = p.rain * rainShape(t);
+    const rainNow = p.rain * rainShape(t, p.rainHours);
     const Z = NODES.map(n => riverStage(n, Qk, tide));
     const zin = {}, net = {};
     ids.forEach(id => { const b = B[id]; zin[id] = vol[id] > 0 ? levelFromVolume(b.tab, vol[id]) : b.zb; net[id] = 0; });

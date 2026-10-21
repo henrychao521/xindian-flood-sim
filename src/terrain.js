@@ -188,6 +188,7 @@ function renderContour(fr) {
   REGION.labels.forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
   drawBuildingsOnMap(g, fr);
   drawOSMOnMap(g, waterLevels(fr));
+  drawInundOverlay(g, W, H);  // 疊在道路與建物之上，官方積水格多半在街道上
   (REGION.mapLabels || []).forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
   const [lx, ly] = cellToCanvas(DEM_DATA.low[0], DEM_DATA.low[1]);
   g.strokeStyle = "#1a1a1a"; g.lineWidth = 2; g.beginPath(); g.arc(lx, ly, 7, 0, Math.PI * 2); g.stroke();
@@ -201,13 +202,39 @@ function renderContour(fr) {
   g.textAlign = "center"; g.fillStyle = "rgba(255,255,255,.88)"; g.fillRect(W - 36, 8, 26, 34); g.fillStyle = "#1a1a1a"; g.fillText("N", W - 23, 23); g.fillText("↑", W - 23, 37);
   updateContourInfo(); updateFlowStatus(); startParticles();
 }
+// 臺北市水利處「降雨積水模擬圖」（112 年版）疊圖：洋紅色格，顏色越深積水越深
+let inundGrid = null, inundCase = null;
+function inundCells(caseKey) {
+  if (typeof INUND_DATA === "undefined" || !INUND_DATA.cases[caseKey]) return null;
+  if (inundCase !== caseKey) { const b = atob(INUND_DATA.cases[caseKey]); inundGrid = new Uint8Array(b.length); for (let k = 0; k < b.length; k++) inundGrid[k] = b.charCodeAt(k); inundCase = caseKey; }
+  return inundGrid;
+}
+function inundOn() { const c = $("showInund"); return !!(c && c.checked); }
+function inundCaseKey() { const s = $("inundCase"); return s ? s.value : "100"; }
+function drawInundOverlay(g, W, H) {
+  if (!inundOn()) return;
+  const grid = inundCells(inundCaseKey()); if (!grid) return;
+  const oc = document.createElement("canvas"); oc.width = DEM.nx; oc.height = DEM.ny;
+  const octx = oc.getContext("2d"), img = octx.createImageData(DEM.nx, DEM.ny);
+  for (let j = 0; j < DEM.ny; j++) for (let i = 0; i < DEM.nx; i++) {
+    const k = idx(i, j), c = grid[k]; if (!c) continue;
+    const p = ((DEM.ny - 1 - j) * DEM.nx + i) * 4;
+    img.data[p] = 190; img.data[p + 1] = 40; img.data[p + 2] = 150; img.data[p + 3] = Math.min(230, 90 + (c - 2) * 45);
+  }
+  octx.putImageData(img, 0, 0); g.imageSmoothingEnabled = false; g.drawImage(oc, 0, 0, W, H);
+}
+function inundLabel(k) {
+  if (!inundOn()) return "";
+  const grid = inundCells(inundCaseKey()); if (!grid) return "";
+  return `・水利處模擬圖（${inundCaseKey()} mm/h）：${grid[k] ? INUND_DATA.classes[grid[k]] : "無積水或 < 0.15 m"}`;
+}
 function updateContourInfo() {
   const box = $("contourInfo"); if (!box) return;
   if (!contourHover) { box.innerHTML = "把滑鼠移到地圖上查看實測高程與水深。等高線間距 0.5 m，粗線為整數公尺，深灰線為防洪牆。"; return; }
   const k = idx(contourHover.i, contourHover.j), z = DEM.z[k], l = contourWater && contourWater[k];
   const x = DEM.x0 + (contourHover.i + 0.5) * DEM.d, y = DEM.y0 + (contourHover.j + 0.5) * DEM.d;
   const kind = DEM.mask[k] === 2 ? "防洪牆" : DEM.mask[k] === 1 ? "堤內" : DEM.mask[k] === 3 ? "對岸（不在模擬範圍）" : "堤外";
-  box.innerHTML = `TWD97 <span class="num">${Math.round(x)}, ${Math.round(y)}</span>・${kind}・地面 EL. <b class="num">${fmt(z)}</b> m・` + (l && !isNaN(l) ? `水深 <b class="num">${fmt(l - z)}</b> m` : "無積水");
+  box.innerHTML = `TWD97 <span class="num">${Math.round(x)}, ${Math.round(y)}</span>・${kind}・地面 EL. <b class="num">${fmt(z)}</b> m・` + (l && !isNaN(l) ? `水深 <b class="num">${fmt(l - z)}</b> m` : "無積水") + inundLabel(k);
   const pb = nearestPub(x - DEM.x0, y - DEM.y0); if (pb) box.innerHTML += `・<b>${pb.n}</b>（${pb.label}）`;
 }
 function bindContourHover() {

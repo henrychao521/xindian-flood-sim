@@ -12,13 +12,16 @@ for r in $REGIONS; do
   if [ "$r" = xindian ]; then
     python3 "$ROOT/src/build.py" >/dev/null
     python3 "$ROOT/src/build.py" --local-three "$TMP/t_xindian.html" >/dev/null
-    (cd "$TMP" && PRESETS=pdf,rain node "$ROOT/tests/region_check.js" "$TMP/t_xindian.html" "$TMP/t_xindian")
+    (cd "$TMP" && PRESETS=pdf,rain,shortrain node "$ROOT/tests/region_check.js" "$TMP/t_xindian.html" "$TMP/t_xindian")
   else
     python3 "$ROOT/scripts/build_region.py" "$r" >/dev/null
     python3 "$ROOT/src/build.py" --region "$r" >/dev/null
     python3 "$ROOT/src/build.py" --region "$r" --local-three "$TMP/t_$r.html" >/dev/null
-    (cd "$TMP" && node "$ROOT/tests/region_check.js" "$TMP/t_$r.html" "$TMP/t_$r")
+    (cd "$TMP" && PRESETS=keyopen,rain,shortrain node "$ROOT/tests/region_check.js" "$TMP/t_$r.html" "$TMP/t_$r")
   fi
   mkdir -p "$ROOT/data/processed/$r"; cp "$TMP/t_${r}_stats.json" "$ROOT/data/processed/$r/results.json"
 done
 python3 "$ROOT/scripts/overview_map.py"
+for r in $REGIONS; do  # 與水利處降雨積水模擬圖比對（最後一個情境＝短延時 100 mm/h）
+  python3 -I "$ROOT/scripts/compare_inundation.py" "$r" "$TMP/t_${r}_stats.json" 100
+done
