@@ -9,7 +9,7 @@ os.chdir("xindian-flood-sim")
 subprocess.run(["git", "log", "--oneline", "-1"])
 import torch; print("torch", torch.__version__, "cuda", torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else "-", flush=True)
 out = pathlib.Path("/content/sweep_out"); out.mkdir(exist_ok=True)
-regions = sys.argv[1:] or ["xindian", "tamsui", "shilin", "zhongshan", "neihu", "jingmei", "beitou"]
+regions = ["xindian", "tamsui", "shilin", "zhongshan", "neihu", "jingmei", "beitou"]
 t0 = time.time(); done = []
 try:
     for r in regions:
