@@ -1,0 +1,19 @@
+{
+ "case_mm_h": "130",
+ "model_preset": "shortrain",
+ "inland_ha": 1192.9,
+ "ge15cm": {
+  "official_ha": 127.9,
+  "model_ha": 0.7,
+  "iou": 0.001,
+  "hit_rate": 0.001,
+  "false_alarm": 0.889
+ },
+ "ge50cm": {
+  "official_ha": 12.6,
+  "model_ha": 0.0,
+  "iou": 0.0,
+  "hit_rate": 0.0,
+  "false_alarm": 1.0
+ }
+}
