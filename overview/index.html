@@ -43,6 +43,7 @@ dl { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; }
 dl div { display: flex; gap: 6px; align-items: baseline; }
 dt { color: var(--muted); font-size: 12px; }
 dd { margin: 0; font-size: 13px; }
+.res { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
 .num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
 .notes { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; color: var(--muted); font-size: 13px; }
 .notes ul { margin: 6px 0 0; padding-left: 20px; }
@@ -76,12 +77,12 @@ footer a, .notes a { color: var(--accent); }
       <a class="card" href="../tamsui/">
         <h2>淡水河東岸</h2>
         <p>萬華北、大同、中山西・淡水河、基隆河下游</p>
-        <dl><div><dt>堤內面積</dt><dd class="num">11.93 km²</dd></div><div><dt>疏散門</dt><dd class="num">5</dd></div><div><dt>抽水站</dt><dd class="num">13</dd></div></dl>
+        <dl><div><dt>堤內面積</dt><dd class="num">11.93 km²</dd></div><div><dt>疏散門</dt><dd class="num">9</dd></div><div><dt>抽水站</dt><dd class="num">13</dd></div></dl>
       </a>
       <a class="card" href="../shilin/">
         <h2>基隆河下游（社子・士林）</h2>
         <p>士林、社子・基隆河下游、雙溪</p>
-        <dl><div><dt>堤內面積</dt><dd class="num">20.4 km²</dd></div><div><dt>疏散門</dt><dd class="num">6</dd></div><div><dt>抽水站</dt><dd class="num">22</dd></div></dl>
+        <dl><div><dt>堤內面積</dt><dd class="num">20.4 km²</dd></div><div><dt>假想缺口</dt><dd class="num">6</dd></div><div><dt>抽水站</dt><dd class="num">22</dd></div></dl>
       </a>
       <a class="card" href="../zhongshan/">
         <h2>基隆河中游（中山・松山・大直）</h2>
@@ -101,7 +102,7 @@ footer a, .notes a { color: var(--accent); }
       <a class="card" href="../beitou/">
         <h2>基隆河出海段（北投・關渡）</h2>
         <p>北投、關渡、士林北・基隆河出海段、磺溪</p>
-        <dl><div><dt>堤內面積</dt><dd class="num">26.87 km²</dd></div><div><dt>疏散門</dt><dd class="num">2</dd></div><div><dt>抽水站</dt><dd class="num">5</dd></div></dl>
+        <dl><div><dt>堤內面積</dt><dd class="num">26.87 km²</dd></div><div><dt>假想缺口</dt><dd class="num">2</dd></div><div><dt>抽水站</dt><dd class="num">5</dd></div></dl>
       </a>
     </div>
   </div>
@@ -110,9 +111,10 @@ footer a, .notes a { color: var(--accent); }
     <ul>
       <li>地形：內政部 2025 年 20 m DEM；堤線沿河道邊緣自動建立，必要處依地形與 OpenStreetMap 手動補描。</li>
       <li>河道水位以「計畫洪峰流量的百分比」在常水位與計畫洪水位之間內插，屬示意，不是水理演算。</li>
-      <li>疏散門位置取自 OpenStreetMap；士林・社子與北投・關渡的 OSM 沒有疏散門資料，改依道路穿越堤線處推定。</li>
+      <li>疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足；士林・社子與北投・關渡兩份資料都沒有疏散門，頁面上的「水門」是依道路穿越堤線處設定的假想缺口。</li>
       <li>堤內淹水以二維局部慣性淺水波法計算，排水系統依臺北市雨水下水道與抽水站設計標準。</li>
       <li>各河段範圍邊界視為封閉，相鄰河段之間的水不互通。</li>
+      <li>卡片上的公頃數是固定情境在 4 小時時的堤內淹水面積（水深 ≥ 0.1 m），用來比較各河段的相對規模，不是淹水潛勢圖。</li>
     </ul>
   </section>
   <footer>

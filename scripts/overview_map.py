@@ -12,13 +12,23 @@ ny, nx = G.shape
 dw = json.loads((ROOT / "data/processed/demW.json").read_text())
 regs = [{"id": "xindian", "href": "../", "title": "新店溪（萬華・中正・大安）", "river": "新店溪",
          "bbox": [dw["x0"], dw["y0"], dw["x0"] + dw["nx"] * dw["d"], dw["y0"] + dw["ny"] * dw["d"]]}]
+xr = ROOT / "data/processed/xindian/results.json"  # 新店溪頁面：PRESETS=pdf,rain 跑 tests/region_check.js 的結果
+if xr.exists():
+    rs = json.loads(xr.read_text(encoding="utf-8"))
+    regs[0]["results"] = {"keyGate": rs["keyGate"], "keyopen_label": "PDF 情境：馬場町門未關（外水 7.0 m，4 h）", "keyopen_ha": rs["keyopen"]["t4h"]["area_ha"],
+                          "rain_ha": rs["rain"]["t4h"]["area_ha"], "rain_deep_ha": rs["rain"]["t4h"]["deep_ha"]}
 for rid in ["tamsui", "shilin", "zhongshan", "neihu", "jingmei", "beitou"]:
     f = ROOT / f"regions/{rid}.json"
     if not f.exists() or not (ROOT / rid / "index.html").exists(): continue
     c = json.loads(f.read_text(encoding="utf-8"))
     s = json.loads((ROOT / f"data/processed/{rid}/summary.json").read_text(encoding="utf-8"))
-    regs.append({"id": rid, "href": f"../{rid}/", "title": c["title"].replace("淹水模擬器", ""), "river": c["river"], "districts": c["districts"],
-                 "bbox": c["bbox"], "inland_km2": s["inland_km2"], "gates": len(s["gates"]), "pumps": len(s["pumps"])})
+    rec = {"id": rid, "href": f"../{rid}/", "title": c["title"].replace("淹水模擬器", ""), "river": c["river"], "districts": c["districts"],
+           "bbox": c["bbox"], "inland_km2": s["inland_km2"], "gates": len(s["gates"]), "pumps": len(s["pumps"]), "auto_gates": s.get("auto_gates", 0)}
+    rf = ROOT / f"data/processed/{rid}/results.json"  # tests/region_check.js 的情境結果（4 小時）
+    if rf.exists():
+        rs = json.loads(rf.read_text(encoding="utf-8"))
+        rec["results"] = {"keyGate": rs["keyGate"], "keyopen_ha": rs["keyopen"]["t4h"]["area_ha"], "rain_ha": rs["rain"]["t4h"]["area_ha"], "rain_deep_ha": rs["rain"]["t4h"]["deep_ha"]}
+    regs.append(rec)
 # 只裁出有資料的範圍（臺北市界外為 NaN）
 rows = np.where(~np.isnan(G).all(axis=1))[0]; cols = np.where(~np.isnan(G).all(axis=0))[0]
 r0, r1, c0, c1 = rows[0], rows[-1] + 1, cols[0], cols[-1] + 1
@@ -49,9 +59,16 @@ boxes = "\n".join(
     f'aria-label="{esc(r["title"])}"><span>{esc(r["title"].split("（")[0])}</span></a>' for r in regs)
 cards = []
 for r in regs:
-    stats = (f'<dl><div><dt>堤內面積</dt><dd class="num">{r["inland_km2"]} km²</dd></div><div><dt>疏散門</dt><dd class="num">{r["gates"]}</dd></div>'
-             f'<div><dt>抽水站</dt><dd class="num">{r["pumps"]}</dd></div></dl>') if "inland_km2" in r else \
-            '<dl><div><dt>特色</dt><dd>本專案起點：颱風預報換算、五座疏散門、示範影片</dd></div></dl>'
+    res = r.get("results")
+    gate_word = "假想缺口" if r.get("auto_gates") else "疏散門"
+    stats = (f'<dl><div><dt>堤內面積</dt><dd class="num">{r["inland_km2"]} km²</dd></div><div><dt>{gate_word}</dt><dd class="num">{r["gates"]}</dd></div>'
+             f'<div><dt>抽水站</dt><dd class="num">{r["pumps"]}</dd></div></dl>'
+             + (f'<dl class="res"><div><dt>{esc(res.get("keyopen_label", res["keyGate"] + "未關（計畫洪峰 80%，4 h）"))}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
+                f'<div><dt>時雨量 110 mm（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
+             ) if "inland_km2" in r else \
+            ('<dl><div><dt>特色</dt><dd>本專案起點：颱風預報換算、五座疏散門、示範影片</dd></div></dl>'
+             + (f'<dl class="res"><div><dt>{esc(res["keyopen_label"])}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
+                f'<div><dt>時雨量 110 mm（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else ""))
     cards.append(f'''      <a class="card" href="{r["href"]}">
         <h2>{esc(r["title"])}</h2>
         <p>{esc(r.get("districts", "萬華、中正、大安"))}・{esc(r["river"])}</p>
@@ -102,6 +119,7 @@ dl {{ display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; }}
 dl div {{ display: flex; gap: 6px; align-items: baseline; }}
 dt {{ color: var(--muted); font-size: 12px; }}
 dd {{ margin: 0; font-size: 13px; }}
+.res {{ margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }}
 .num {{ font-family: var(--font-data); font-variant-numeric: tabular-nums; }}
 .notes {{ background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; color: var(--muted); font-size: 13px; }}
 .notes ul {{ margin: 6px 0 0; padding-left: 20px; }}
@@ -129,9 +147,10 @@ footer a, .notes a {{ color: var(--accent); }}
     <ul>
       <li>地形：內政部 2025 年 20 m DEM；堤線沿河道邊緣自動建立，必要處依地形與 OpenStreetMap 手動補描。</li>
       <li>河道水位以「計畫洪峰流量的百分比」在常水位與計畫洪水位之間內插，屬示意，不是水理演算。</li>
-      <li>疏散門位置取自 OpenStreetMap；士林・社子與北投・關渡的 OSM 沒有疏散門資料，改依道路穿越堤線處推定。</li>
+      <li>疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足；士林・社子與北投・關渡兩份資料都沒有疏散門，頁面上的「水門」是依道路穿越堤線處設定的假想缺口。</li>
       <li>堤內淹水以二維局部慣性淺水波法計算，排水系統依臺北市雨水下水道與抽水站設計標準。</li>
       <li>各河段範圍邊界視為封閉，相鄰河段之間的水不互通。</li>
+      <li>卡片上的公頃數是固定情境在 4 小時時的堤內淹水面積（水深 ≥ 0.1 m），用來比較各河段的相對規模，不是淹水潛勢圖。</li>
     </ul>
   </section>
   <footer>

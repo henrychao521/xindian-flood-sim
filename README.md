@@ -26,6 +26,7 @@ python3 src/make_region_template.py       # 新店溪模板 → 通用河段模�
 python3 src/build.py                      # 新店溪 → index.html
 python3 src/build.py --region <id>        # 河段 → <id>/index.html
 python3 scripts/overview_map.py           # 全市總覽 → overview/
+scripts/run_checks.sh [id …]              # 以上全部＋tests/region_check.js 情境檢查，結果寫入 data/processed/<id>/results.json
 ```
 
 ## 功能

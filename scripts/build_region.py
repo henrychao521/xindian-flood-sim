@@ -179,6 +179,15 @@ for p in pubs:
     if key not in seen: seen.add(key); pubs2.append(p)
 pubs = pubs2
 gseen = {}; [gseen.setdefault(g["n"], g) for g in gates_osm]; gates_osm = list(gseen.values())
+# 臺北市水利處疏散門清單（data.taipei，WGS84）為準：同名或 100 m 內的 OSM 門改用官方名稱與編號，清單有而 OSM 沒有的補進來
+VAR = str.maketrans("洲", "州")
+for r in csv.DictReader(open(ROOT / "data/raw/taipei_evac_gates.csv", encoding="utf-8-sig")):
+    X, Y = TO_TM.transform(float(r["X"]), float(r["Y"]))
+    if not (xa <= X <= xb and ya <= Y <= yb): continue
+    code, nm = r["Name"].split(",", 1); nm = nm.strip(); gx, gy = round(X - xa, 1), round(Y - ya, 1)
+    hit = next((g for g in gates_osm if not g.get("official") and (g["n"].translate(VAR) == (nm + "疏散門").translate(VAR) or math.hypot(g["x"] - gx, g["y"] - gy) < 100)), None)
+    if hit: hit.update({"n": nm + "疏散門", "ref": code, "x": gx, "y": gy, "official": True})
+    else: gates_osm.append({"n": nm + "疏散門", "ref": code, "x": gx, "y": gy, "official": True})
 pumps = []
 for r in csv.DictReader(open(ROOT / "data/raw/taipei_pump_stations.csv", encoding="utf-8-sig")):
     X, Y = float(r["X坐標"]), float(r["Y坐標"])
