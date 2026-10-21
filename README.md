@@ -27,7 +27,19 @@ python3 src/build.py                      # 新店溪 → index.html
 python3 src/build.py --region <id>        # 河段 → <id>/index.html
 python3 scripts/overview_map.py           # 全市總覽 → overview/
 scripts/run_checks.sh [id …]              # 以上全部＋tests/region_check.js 情境檢查，結果寫入 data/processed/<id>/results.json
+SKIP_DATA=1 scripts/run_checks.sh [id …]  # 只改 src/ 時：跳過 build_region.py（不需 OSM／DEM），重建頁面＋檢查＋總覽
 ```
+
+### 降雨情境集合（Colab GPU）
+
+```sh
+NODE_PATH=$(npm root -g) node scripts/dump_flow_input.js work/checks/t_<id>.html <id>   # 擷取頁面送進二維水流的輸入 → work/flow_in/<id>.json（repo 內有壓縮版）
+python3 scripts/flow_torch.py validate <id>              # PyTorch 移植版 vs 瀏覽器（短延時暴雨 100 mm/h）
+python3 scripts/flow_torch.py sweep <id> --device cuda   # 128 個降雨情境（強度×延時×排水設定）→ work/sweep/<id>_sweep.json、<id>_maps.json
+python3 scripts/sweep_table.py                           # 結果表（docs/STAGES.md 階段 9）
+```
+
+在 Colab 上跑：`colab/sweep_gpu.py`（一個河段 8–30 分鐘，L4）。從 Studio 以 Colab CLI 執行用 `colab/sweep_perregion.sh`：一個河段一次 `colab exec`、做完立刻下載（`colab exec` 長時間會斷線、沒有連線的 VM 會被收回，見 `docs/STAGES.md` 階段 9）。結果放到 `data/processed/<id>/sweep.json` 與 `sweep_maps.json` 後重建頁面，頁面就會多出「降雨強度與淹水面積」面板和「淹水門檻／淹水機率／最大水深包絡」圖層。
 
 ## 功能
 
@@ -37,11 +49,12 @@ scripts/run_checks.sh [id …]              # 以上全部＋tests/region_check.
 - 雨水下水道（78.8 mm/hr）與抽水站（45–60 mm/hr）排水模型
 - OpenStreetMap 道路、橋樑、公共設施淹水狀態
 - 疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足
+- GPU 降雨情境集合（`scripts/flow_torch.py`，二維水流的 PyTorch 移植，在 Colab 批次計算 128 個強度×延時×排水情境）：每頁有強度–面積曲線、淹水門檻圖（多大的雨會淹到這裡）、淹水機率與最大水深包絡圖層
 - 可疊上臺北市水利處「降雨積水模擬圖」（112 年版，78.8／100／130 mm/h）對照；`scripts/compare_inundation.py` 計算面積、命中率與 IoU
 - 颱風預報換算（合理化公式估算新店溪洪峰，只有新店溪頁面）
 - 疏散門缺少 OSM 資料的河段，依道路穿越堤線處推定位置（頁面上註明）
 
-## 在 Colab 重跑
+## 在 Colab 重跑（CPU 前處理）
 
 `colab/run_all.ipynb`（[在 Colab 開啟](https://colab.research.google.com/github/henrychao521/xindian-flood-sim/blob/main/colab/run_all.ipynb)）會掛載 Drive 當快取、安裝 Playwright 與 three.js、從 sheethub/tpe3d 取建物、拼接 DEM，然後跑 `scripts/run_checks.sh` 重建所有河段的資料、頁面、情境檢查與水利處積水模擬圖對照，最後推到分支 `colab-results`。需要在 Colab Secrets 放 `GH_TOKEN`。不需要 GPU，全程約 2–3 小時（OSM 下載佔多數，第二次有快取）。
 

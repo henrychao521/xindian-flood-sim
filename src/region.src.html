@@ -56,6 +56,10 @@ header { display: grid; gap: 6px; }
 h1 { font-family: var(--font-display); font-size: clamp(24px, 3.4vw, 34px); margin: 0; text-wrap: balance; line-height: 1.25; }
 h2 { font-size: 15px; margin: 0; font-weight: 700; }
 .lede { margin: 0; color: var(--muted); max-width: 70ch; }
+.jump { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; margin: 8px 0 0; }
+.jump a { color: var(--accent); text-decoration: none; white-space: nowrap; } .jump a:hover { text-decoration: underline; }
+.jump a::before { content: "↓ "; color: var(--muted); }
+#sweepChart text { font-size: 12.5px; } #sweepChart .t-ink { font-size: 12.5px; }
 .num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
 
 .presets { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -174,6 +178,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
   </header>
 
   <div class="presets" id="presets" role="group" aria-label="情境範例"></div>
+  <nav class="jump" aria-label="頁面段落"><a href="#sec-stage">水位與流量</a><a href="#sec-profile">河道縱斷面</a><a href="#sec-terrain">地形與二維水流</a><a href="#sec-sweep">情境集合</a><a href="#sec-bld">建物</a><a href="#sec-infra">道路與設施</a><a href="#sec-notes">假設與限制</a></nav>
 
 
   <div class="layout">
@@ -244,6 +249,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
     </aside>
 
     <main class="main">
+      <a id="sec-stage"></a>
       <section class="kpis" id="kpis" aria-live="polite"></section>
 
       <div class="panel">
@@ -270,7 +276,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         </section>
       </div>
 
-      <section class="panel">
+      <section class="panel" id="sec-profile">
         <div class="chart-head">
           <h2>河道縱斷面</h2>
           <div class="legend"><span><i style="background:var(--river)"></i>水面</span><span><i style="background:var(--muted)"></i>防洪牆堤頂</span><span><i style="background:var(--ground)"></i>高灘地</span><span><i style="background:var(--danger)"></i>水門底檻</span></div>
@@ -278,7 +284,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         <div class="table-wrap" style="overflow-x:auto"><svg id="profile" viewBox="0 0 820 300" style="min-width:560px" role="img" aria-label="河道水位縱斷面"></svg></div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="sec-terrain">
         <div class="chart-head">
           <h2>臺北市側堤內實測地形：二維水流、等高線與 3D</h2>
           <span class="hint" id="terrainWhen"></span>
@@ -291,6 +297,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
             <div class="legend"><span><i style="background:#123f9e;height:8px"></i>堤內積水（越深越濃）</span><span><i style="background:rgb(120,200,235);height:8px"></i>堤外河道、高灘地</span></div>
             <div class="legend inund-ctl"><label class="check"><input type="checkbox" id="showInund"> 疊上臺北市水利處「降雨積水模擬圖」（112 年版）</label><select id="inundCase" aria-label="模擬圖降雨情境"><option value="78.8">78.8 mm/h</option><option value="100" selected>100 mm/h</option><option value="130">130 mm/h</option></select><span><i style="background:rgb(190,40,150);opacity:.6;height:8px"></i>官方模擬積水 ≥ 0.15 m（越深越濃）</span></div>
             <div class="hint" id="inundCmp" hidden></div>
+            <div class="legend inund-ctl" id="sweepCtl"><label class="check" for="sweepLayer">疊上 GPU 情境集合（128 個降雨情境，Colab 批次計算）</label><select id="sweepLayer" aria-label="情境集合圖層"><option value="none" selected>不疊圖</option><option value="thresh">淹水門檻：多大的雨會淹到這裡（1 h 定強度）</option><option value="prob">淹水機率（設計排水，32 個強度×延時情境）</option><option value="hmax">最大水深包絡（1 h 定強度，可選強度）</option></select><select id="sweepCase" aria-label="包絡圖降雨強度"></select><span id="sweepThreshLegend"></span><span><i style="background:rgb(230,90,30);opacity:.7;height:8px"></i>機率越高越濃（&lt; 25% 不畫）</span><span><i style="background:rgb(90,40,200);opacity:.7;height:8px"></i>最大水深越深越濃</span></div>
             <div class="hint">水利處模擬圖是 1 小時短延時降雨、河道常水位、依實際雨水下水道網路計算的結果；要對照請選「短延時暴雨 100 mm/h」情境。資料：臺北市政府工務局水利工程處（data.taipei，政府資料開放授權條款第 1 版）。</div>
             <div class="ramp"><span>EL. 3 m</span><span class="ramp-bar"></span><span>8 m</span><span>・防洪牆為深灰色</span></div>
             <div class="legend"><span><i style="background:#2b2b2b;height:4px"></i>橋樑</span><span><i style="background:#5b2a86;height:8px;border-radius:50%"></i>公共設施</span><span><i style="background:#fff;height:8px;border:2px solid #555;width:8px"></i>其他疏散門（OSM）</span><span><i style="background:rgb(214,69,65);height:3px"></i>道路中斷</span><span><i style="background:rgb(242,153,74);height:3px"></i>道路危險</span></div>
@@ -312,7 +319,17 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         <div class="hint">@@TERRAINHINT@@</div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="sweepPanel"><a id="sec-sweep"></a>
+        <div class="chart-head">
+          <h2>降雨強度與淹水面積：GPU 情境集合</h2>
+          <span class="hint" id="sweepMeta"></span>
+        </div>
+        <div class="legend inund-ctl"><label for="sweepDrain">排水設定</label><select id="sweepDrain" aria-label="排水設定"></select><label for="sweepMetric">指標</label><select id="sweepMetric" aria-label="指標"><option value="peak" selected>8 小時內尖峰淹水面積（≥ 0.1 m）</option><option value="t4h">T+4 h 淹水面積（與頁面統計同一時刻）</option><option value="deep">尖峰 ≥ 0.5 m 面積</option></select></div>
+        <svg id="sweepChart" role="img" aria-label="降雨強度與淹水面積曲線"></svg>
+        <div class="info-line" id="sweepNow"></div>
+        <div class="hint">同一套二維水流模型（src/flow.js 移植成 PyTorch，scripts/flow_torch.py）在 Colab GPU 一次算完 8 種強度 × 4 種延時 × 4 種排水設定、水門關閉的內水型情境；每條線是一種降雨延時。頁面上的 T+4 h 統計只是一個時刻的快照，定強度降雨結束後積水會先擴到尖峰再被抽排掉，所以尖峰面積通常比 T+4 h 大。洋紅方塊是臺北市水利處降雨積水模擬圖（1 小時、≥ 0.15 m）的面積，供數量級對照。</div>
+      </section>
+      <section class="panel" id="sec-bld">
         <div class="chart-head">
           <h2>建物受災統計（堤內）</h2>
           <span class="hint" id="bldWhen"></span>
@@ -327,7 +344,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         <div class="hint">建物來自臺北市「自動化 3D 近似建物模型」（data.taipei，經 sheethub/tpe3d 轉為 GeoJSON，約 2017 年資料），範圍內共 <span id="bldAll"></span> 棟。水深取建物所在 20 m 格的二維模擬結果；樓地板面積用「建物高度 ÷ 3.3 m」估樓層數，再乘上建物占地面積。</div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="sec-infra">
         <div class="chart-head">
           <h2>道路與公共設施</h2>
           <span class="hint" id="infraWhen"></span>
@@ -456,6 +473,7 @@ function recompute() {
   frames = simulate(P);
   resetParticles();
   render();
+  if (typeof renderSweepPanel === "function") renderSweepPanel();
   clearTimeout(recompute.t); recompute.t = setTimeout(runFlow, 250);
 }
 
@@ -635,7 +653,12 @@ function renderInfra(fr) {
     <div class="kpi"><span class="kpi-label">積水路段（0.1–0.3 m）</span><span class="kpi-value">${fmt(wet, 1)}<small>km</small></span></div>
     <div class="kpi"><span class="kpi-label">堤內道路總長</span><span class="kpi-value">${fmt(st.total, 1)}<small>km</small></span></div>`;
   const LBL = ["中斷", "危險", "積水"], CLS = ["danger", "warn", "watch"];
-  $("pubBody").innerHTML = st.pubs.map(p => { const c = roadStatus(p.depth); return `<tr><td><b>${p.n}</b></td><td>${p.label}</td><td class="r num">${p.depth > 0.005 ? fmt(p.depth) + " m" : "—"}</td><td><span class="pill ${c >= 0 ? CLS[c] : "ok"}">${c >= 0 ? LBL[c] : "無積水"}</span></td></tr>`; }).join("");
+  const row = p => { const c = roadStatus(p.depth); return `<tr><td><b>${p.n}</b></td><td>${p.label}</td><td class="r num">${p.depth > 0.005 ? fmt(p.depth) + " m" : "—"}</td><td><span class="pill ${c >= 0 ? CLS[c] : "ok"}">${c >= 0 ? LBL[c] : "無積水"}</span></td></tr>`; };
+  const hit = st.pubs.filter(p => roadStatus(p.depth) >= 0), rest = st.pubs.length - hit.length;
+  $("pubBody").innerHTML = (hit.length ? hit.map(row).join("") : `<tr><td colspan="4" class="hint">這個時刻沒有設施所在位置積水 ≥ 0.1 m。</td></tr>`)
+    + (renderInfra.showAll ? st.pubs.filter(p => roadStatus(p.depth) < 0).map(row).join("") : "")
+    + (rest > 0 ? `<tr><td colspan="4"><button type="button" class="preset" id="pubMore">${renderInfra.showAll ? "收起未積水的設施" : `顯示其餘 ${rest} 處未積水的設施`}</button></td></tr>` : "");
+  const more = $("pubMore"); if (more) more.addEventListener("click", () => { renderInfra.showAll = !renderInfra.showAll; renderInfra(fr); });
   $("infraWhen").textContent = `${hhmm(fr.t)}・${FLOW.result ? "二維水流結果" : "靜水面估算"}`;
 }
 
@@ -684,6 +707,7 @@ function render() {
 
 //@@TERRAIN@@
 //@@FLOW@@
+//@@SWEEP@@
 
 // ---------------- 播放 ----------------
 let tPos = null; // 播放中的連續時間（以 5 分鐘為 1 格），供 3D 內插
@@ -714,7 +738,7 @@ $("inundCase").addEventListener("change", () => { if (frames.length) renderConto
 bindRange("q", "Qpeak"); bindRange("tide", "tide"); bindRange("rain", "rain"); bindRange("sewer", "sewerMM"); bindRange("pumpmm", "pumpMM"); bindRange("avail", "avail"); bindRange("cc", "C"); bindRange("open", "openPct"); bindRange("close", "closeAt");
 $("tideSync").addEventListener("change", e => { P.tideSync = e.target.checked; activePreset = null; syncControls(); recompute(); });
 $("cPdf").addEventListener("change", e => { P.C = e.target.checked ? 17 : Number($("cc").value) || 1.55; activePreset = null; syncControls(); recompute(); });
-bindContourHover(); init3D();
+bindContourHover(); if (typeof bindSweep === "function") bindSweep(); init3D();
 $("showBld").addEventListener("change", e => { if (T3.bld) T3.bld.visible = e.target.checked; });
 $("ex").addEventListener("input", e => { T3.ex = Number(e.target.value); $("exOut").textContent = T3.ex + "×"; applyHeights(); });
 $("reset3d").addEventListener("click", () => { if (!T3.ok) return; T3.camera.position.set(...CAM0); T3.controls.target.set(0, 4, 0); });

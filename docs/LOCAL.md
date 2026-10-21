@@ -51,12 +51,14 @@ python3 scripts/mosaic.py          # → work/taipei_dem20.npz
 - 任何模型改動都要跑 bash scripts/run_checks.sh（或單一河段），確認 errors [] 與 mobile sw 400，再把結果寫進 docs/STAGES.md 新階段。
 - 每個階段完成就 commit 並 push 到 main；資料備份在 data/raw 與 data/processed。
 - 不要把 PDF 或 OSM 原始檔放進 repo。
-目前的下一步候選：（1）山區河段加入排水溪流（磺溪、內溝溪、雙溪）讓降雨積水不致高估；（2）用更細的地形（5 m DEM）重做街道低點；（3）歷史事件（2001 納莉颱風）情境。
+目前的下一步候選：（1）山區河段加入排水溪流（磺溪、內溝溪、雙溪）讓降雨積水不致高估；（2）用更細的地形（5 m DEM）重做街道低點；（3）歷史事件（2001 納莉颱風）情境；（4）情境集合擴到洩洪與水門失效情境（flow_torch.py 目前只處理水門關閉的內水型）。
 ```
 
 ## 4. Colab
 
-Colab 無法從本機的 Claude 直接呼叫（沒有 API）。流程是：本機 Claude 推 repo → 在瀏覽器開 `colab/run_all.ipynb`（[Colab 連結](https://colab.research.google.com/github/henrychao521/xindian-flood-sim/blob/main/colab/run_all.ipynb)）跑 → 結果推到分支 `colab-results` → 本機 Claude 拉回來看。若用 Claude 桌面版並裝了 Claude in Chrome，可以請它在 Chrome 裡開 Colab 連結、按「全部執行」並回報輸出，但儲存格內容與秘密（`GH_TOKEN`）仍要自己設定。
+Studio 上裝了 Colab CLI（`~/.local/bin/colab`，Pro 方案可開 L4／A100），GPU 工作直接從終端機送：`colab new -s 名 --gpu L4` → `colab exec -s 名 -f 腳本.py` → `colab download` → **一定要 `colab stop -s 名`**（或用 `~/.local/bin/colab-job` 包起來，自動關機與記帳）。降雨情境集合的流程見 README「降雨情境集合（Colab GPU）」與 `docs/STAGES.md` 階段 9（一個河段一次 exec、做完立刻下載）。本機 M4 Max 也可以用 `--device mps` 跑同一支程式，速度與 L4 相當。
+
+以下是沒有 CLI 時的筆記本流程。Colab 無法從本機的 Claude 直接呼叫（沒有 API）。流程是：本機 Claude 推 repo → 在瀏覽器開 `colab/run_all.ipynb`（[Colab 連結](https://colab.research.google.com/github/henrychao521/xindian-flood-sim/blob/main/colab/run_all.ipynb)）跑 → 結果推到分支 `colab-results` → 本機 Claude 拉回來看。若用 Claude 桌面版並裝了 Claude in Chrome，可以請它在 Chrome 裡開 Colab 連結、按「全部執行」並回報輸出，但儲存格內容與秘密（`GH_TOKEN`）仍要自己設定。
 
 ## 5. 連結
 

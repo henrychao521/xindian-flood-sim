@@ -36,6 +36,17 @@ for rid in ["tamsui", "shilin", "zhongshan", "neihu", "jingmei", "beitou"]:
         rs = json.loads(rf.read_text(encoding="utf-8"))
         rec["results"] = {"keyGate": rs["keyGate"], "keyopen_ha": rs["keyopen"]["t4h"]["area_ha"], "rain_ha": rs["rain"]["t4h"]["area_ha"], "rain_deep_ha": rs["rain"]["t4h"]["deep_ha"]}
     regs.append(rec)
+def sweep_summary(rid):  # Colab GPU 情境集合：1 h 定強度、設計排水的尖峰淹水面積，與抽水可用率 30% 的對照
+    sf = ROOT / f"data/processed/{rid}/sweep.json"
+    if not sf.exists(): return None
+    sw = json.loads(sf.read_text(encoding="utf-8")); sc = sw["scenarios"]
+    pick = lambda dr, I, hr=1: next((s for s in sc if s["drain"] == dr and s["hours"] == hr and s["rain"] == I), None)
+    d = {I: pick("design", I) for I in (78.8, 100, 130)}; p30 = pick("pump30", 100)
+    if not all(d.values()): return None
+    return {"peak": {str(I): d[I]["area_peak"] for I in d}, "pump30_100": p30["area_peak"] if p30 else None, "n": len(sc)}
+for r in regs:
+    sw = sweep_summary(r["id"])
+    if sw: r["sweep"] = sw
 # 只裁出有資料的範圍（臺北市界外為 NaN）
 rows = np.where(~np.isnan(G).all(axis=1))[0]; cols = np.where(~np.isnan(G).all(axis=0))[0]
 r0, r1, c0, c1 = rows[0], rows[-1] + 1, cols[0], cols[-1] + 1
@@ -78,6 +89,10 @@ for r in regs:
              + (f'<dl class="res"><div><dt>{esc(res["keyopen_label"])}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
                 f'<div><dt>時雨量 110 mm・1 小時（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
              + (f'<dl class="res"><div><dt>短延時 100 mm/h：本模型／水利處圖</dt><dd class="num">{r["compare"]["100"]["model_ha"]:.0f}／{r["compare"]["100"]["official_ha"]:.0f} ha</dd><dt>・命中</dt><dd class="num">{(r["compare"]["100"]["hit_rate"] or 0) * 100:.0f}%</dd></div></dl>' if r.get("compare", {}).get("100") else ""))
+    if r.get("sweep"):
+        sw = r["sweep"]
+        stats += (f'<dl class="res"><div><dt>GPU 情境集合尖峰（1 h）78.8／100／130 mm/h</dt><dd class="num">{sw["peak"]["78.8"]:.0f}／{sw["peak"]["100"]:.0f}／{sw["peak"]["130"]:.0f} ha</dd></div>'
+                  + (f'<div><dt>抽水可用率 30%・100 mm/h</dt><dd class="num">{sw["pump30_100"]:.0f} ha</dd></div>' if sw["pump30_100"] is not None else "") + '</dl>')
     cards.append(f'''      <a class="card" href="{r["href"]}">
         <h2>{esc(r["title"])}</h2>
         <p>{esc(r.get("districts", "萬華、中正、大安"))}・{esc(r["river"])}</p>

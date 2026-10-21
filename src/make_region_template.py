@@ -31,7 +31,7 @@ rep(" renderVillages(fr);", "")
 i = p.index('      <section class="panel">\n        <div class="chart-head">\n          <h2>南萬華各里災情')
 j = p.index("      </section>\n", i) + len("      </section>\n")
 p = p[:i] + p[j:]
-i = p.index('      <section class="panel notes">\n        <h2>模型假設')
+i = p.index('      <section class="panel notes" id="sec-notes">\n        <h2>模型假設')
 j = p.index("      </section>\n", i) + len("      </section>\n")
 p = p[:i] + "@@NOTES@@\n" + p[j:]
 # 情境範例

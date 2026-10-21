@@ -56,7 +56,8 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
     pumpMM = torch.tensor([s["pumpMM"] for s in scen], device=dev, dtype=f32)
     avail = torch.tensor([s["avail"] for s in scen], device=dev, dtype=f32)
     cIdx = catch.flatten(); valid = cIdx >= 0; cIdxv = cIdx[valid]
-    cArea = torch.zeros(nC, device=dev, dtype=torch.float64).index_add_(0, cIdxv, torch.full((int(valid.sum()),), A, device=dev, dtype=torch.float64))
+    f64 = torch.float32 if dev.type == "mps" else torch.float64  # MPS 沒有 float64
+    cArea = torch.zeros(nC, device=dev, dtype=f64).index_add_(0, cIdxv, torch.full((int(valid.sum()),), A, device=dev, dtype=f64))
     cStore = torch.clamp(cArea * inp["storeMM"] / 1000, min=1.0).to(f32)[None, :].expand(B, nC).contiguous()
     psiA = (psi * A)
     h = torch.zeros(B, ny, nx, device=dev, dtype=f32); qx = torch.zeros(B, ny, nx - 1, device=dev, dtype=f32); qy = torch.zeros(B, ny - 1, nx, device=dev, dtype=f32)
