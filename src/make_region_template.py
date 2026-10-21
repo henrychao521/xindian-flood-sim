@@ -42,9 +42,9 @@ const PRESETS = [
   { id: "flood80", name: "計畫洪峰 80%＋大潮（水門正常）", p: { ...base, Qpeak: 80, gateOpen: {} } },
   { id: "keyopen", name: `${GATES[REGION.keyGate].name}未關（計畫洪峰 80%）`, p: { ...base, Qpeak: 80, gateOpen: { [KG0]: true } } },
   { id: "allopen", name: "所有水門未關（計畫洪峰 80%）", p: { ...base, Qpeak: 80, gateOpen: Object.fromEntries(GATES.map(g => [g.id, true])) } },
-  { id: "rain", name: "內水型：水門關閉＋時雨量 110 mm", p: { ...base, Qpeak: 60, rain: 110, gateOpen: {} } },
+  { id: "rain", name: "內水型：水門關閉＋時雨量 110 mm（1 小時）", p: { ...base, Qpeak: 60, rain: 110, rainHours: 1, gateOpen: {} } },
   { id: "shortrain", name: "短延時暴雨 100 mm/h（對照水利處模擬圖）", p: { ...base, Qpeak: 20, tide: 1.0, tideSync: false, rain: 100, rainHours: 1, gateOpen: {} } },
-  { id: "pumpfail", name: "抽水站故障：可用率 30%＋時雨量 70 mm", p: { ...base, Qpeak: 60, rain: 70, avail: 30, gateOpen: {} } },
+  { id: "pumpfail", name: "抽水站故障：可用率 30%＋時雨量 70 mm（1 小時）", p: { ...base, Qpeak: 60, rain: 70, rainHours: 1, avail: 30, gateOpen: {} } },
   { id: "over", name: "超過計畫洪峰（120%）＋暴潮", p: { ...base, Qpeak: 120, tide: 2.0, rain: 80, gateOpen: {} } }
 ];
 ''' + p[j:]

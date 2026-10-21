@@ -78,7 +78,7 @@ h2 { font-size: 15px; margin: 0; font-weight: 700; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
 .controls { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px - env(safe-area-inset-top, 0px)); overflow-y: auto; }
-@media (max-width: 900px) { .controls { position: static; max-height: none; overflow: visible; } }
+@media (max-width: 900px) { .controls { position: static; max-height: none; overflow: visible; } .clock { white-space: normal; } }
 .group { display: grid; gap: 10px; }
 .group + .group { border-top: 1px solid var(--line); padding-top: 14px; }
 .group-title { font-size: 12px; letter-spacing: .06em; color: var(--muted); font-weight: 500; }
@@ -299,6 +299,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
             <div class="info-line" id="contourInfo"></div>
             <div class="legend"><span><i style="background:#123f9e;height:8px"></i>堤內積水（越深越濃）</span><span><i style="background:rgb(120,200,235);height:8px"></i>堤外河道、高灘地</span></div>
             <div class="legend inund-ctl"><label class="check"><input type="checkbox" id="showInund"> 疊上臺北市水利處「降雨積水模擬圖」（112 年版）</label><select id="inundCase" aria-label="模擬圖降雨情境"><option value="78.8">78.8 mm/h</option><option value="100" selected>100 mm/h</option><option value="130">130 mm/h</option></select><span><i style="background:rgb(190,40,150);opacity:.6;height:8px"></i>官方模擬積水 ≥ 0.15 m（越深越濃）</span></div>
+            <div class="hint" id="inundCmp" hidden></div>
             <div class="hint">水利處模擬圖是 1 小時短延時降雨、河道常水位、依實際雨水下水道網路計算的結果；要對照請選「短延時暴雨 100 mm/h」情境。資料：臺北市政府工務局水利工程處（data.taipei，政府資料開放授權條款第 1 版）。</div>
             <div class="ramp"><span>EL. 3 m</span><span class="ramp-bar"></span><span>8 m</span><span>・防洪牆為深灰色</span></div>
             <div class="legend"><span><i style="background:#2b2b2b;height:4px"></i>橋樑</span><span><i style="background:#5b2a86;height:8px;border-radius:50%"></i>公共設施</span><span><i style="background:#fff;height:8px;border:2px solid #555;width:8px"></i>其他疏散門（OSM）</span><span><i style="background:rgb(214,69,65);height:3px"></i>道路中斷</span><span><i style="background:rgb(242,153,74);height:3px"></i>道路危險</span></div>
@@ -358,7 +359,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <li><b>疏散門：</b>成功門（底檻 EL. 5.5 m）、南港門（底檻 EL. 8.1 m）、成美門（底檻 EL. 7.0 m）、長壽門（底檻 EL. 8.3 m）、經貿門（底檻 EL. 10.8 m）、南湖門（底檻 EL. 7.7 m）、五分門（底檻 EL. 11.6 m）、康樂門（底檻 EL. 8.9 m）。位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足。底檻高程取門內外地面（20 m DEM）較高者，是推估值；門寬一律假設 8 m。其他 OSM 疏散門（內溝疏散門）只標示位置。</li>
           <li><b>堤防：</b>20 m 網格通常看不到窄的防洪牆，所以堤線沿河道邊緣建立，堤頂高程設為 EL. 12.0 m 或 DEM 較高值。高灘地與防洪牆的實際位置可能與模型差 20–40 m。</li>
           <li><b>水門流量係數依文獻修正。</b>Q = C·B·H<sup>1.5</sup>，C 取 1.45–1.70（C<sub>d</sub> 0.85–1.0 × 1.705，Henderson 1966；Bos 1985），預設 1.55。</li>
-          <li><b>排水系統依臺北市設計標準建模。</b>雨水下水道收水上限 78.8 mm/hr；抽水站 45–60 mm/hr；外水位低於 EL. 2.5 m 時重力閘門可自然排水。範圍內抽水站：經貿抽水站、福山抽水站、誠正抽水站、大坑右抽水站、大坑左抽水站、勤力抽水站、南深右抽水站、南深左抽水站、成功抽水站、南港抽水站、南湖抽水站、長壽抽水站、康樂抽水站、康寧抽水站（臺北市資料大平臺），依最近抽水站劃分集水區。</li>
+          <li><b>排水系統依臺北市設計標準建模。</b>雨水下水道收水上限 78.8 mm/hr；抽水站 45–60 mm/hr；外水位低於 EL. 2.5 m 時重力閘門可自然排水。雨型是以 T+3 h 為中心、長度等於「降雨延時」的定強度降雨。和臺北市水利處「降雨積水模擬圖」（112 年版，1 小時 78.8／100／130 mm）對照：「短延時暴雨 100 mm/h」情境的積水面積與官方同一數量級，但積水位置只有一到三成重疊——本模型是 20 m 網格、集總式下水道，官方是 5 m 地形加實際管網，街道尺度的積水點請以疊圖（地圖下方可開）為準。範圍內抽水站：經貿抽水站、福山抽水站、誠正抽水站、大坑右抽水站、大坑左抽水站、勤力抽水站、南深右抽水站、南深左抽水站、成功抽水站、南港抽水站、南湖抽水站、長壽抽水站、康樂抽水站、康寧抽水站（臺北市資料大平臺），依最近抽水站劃分集水區。</li>
           <li><b>二維水流：</b>局部慣性淺水波法（Bates et al., 2010），建物以孔隙率法處理（臺北市 3D 近似建物模型，範圍內 6,449 棟）。</li>
           <li><b>用途限於教學與情境比較。</b>實際的淹水潛勢與疏散資訊，請以經濟部水利署、臺北市政府工務局水利工程處公布的資料為準。</li>
         </ul>
@@ -534,9 +535,9 @@ const PRESETS = [
   { id: "flood80", name: "計畫洪峰 80%＋大潮（水門正常）", p: { ...base, Qpeak: 80, gateOpen: {} } },
   { id: "keyopen", name: `${GATES[REGION.keyGate].name}未關（計畫洪峰 80%）`, p: { ...base, Qpeak: 80, gateOpen: { [KG0]: true } } },
   { id: "allopen", name: "所有水門未關（計畫洪峰 80%）", p: { ...base, Qpeak: 80, gateOpen: Object.fromEntries(GATES.map(g => [g.id, true])) } },
-  { id: "rain", name: "內水型：水門關閉＋時雨量 110 mm", p: { ...base, Qpeak: 60, rain: 110, gateOpen: {} } },
+  { id: "rain", name: "內水型：水門關閉＋時雨量 110 mm（1 小時）", p: { ...base, Qpeak: 60, rain: 110, rainHours: 1, gateOpen: {} } },
   { id: "shortrain", name: "短延時暴雨 100 mm/h（對照水利處模擬圖）", p: { ...base, Qpeak: 20, tide: 1.0, tideSync: false, rain: 100, rainHours: 1, gateOpen: {} } },
-  { id: "pumpfail", name: "抽水站故障：可用率 30%＋時雨量 70 mm", p: { ...base, Qpeak: 60, rain: 70, avail: 30, gateOpen: {} } },
+  { id: "pumpfail", name: "抽水站故障：可用率 30%＋時雨量 70 mm（1 小時）", p: { ...base, Qpeak: 60, rain: 70, rainHours: 1, avail: 30, gateOpen: {} } },
   { id: "over", name: "超過計畫洪峰（120%）＋暴潮", p: { ...base, Qpeak: 120, tide: 2.0, rain: 80, gateOpen: {} } }
 ];
 let P = JSON.parse(JSON.stringify(PRESETS[0].p));
@@ -1032,6 +1033,7 @@ function renderContour(fr) {
   drawBuildingsOnMap(g, fr);
   drawOSMOnMap(g, waterLevels(fr));
   drawInundOverlay(g, W, H);  // 疊在道路與建物之上，官方積水格多半在街道上
+  const ic = $("inundCmp"); if (ic) { ic.innerHTML = inundCompare(); ic.hidden = !ic.innerHTML; }
   (REGION.mapLabels || []).forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
   const [lx, ly] = cellToCanvas(DEM_DATA.low[0], DEM_DATA.low[1]);
   g.strokeStyle = "#1a1a1a"; g.lineWidth = 2; g.beginPath(); g.arc(lx, ly, 7, 0, Math.PI * 2); g.stroke();
@@ -1065,6 +1067,21 @@ function drawInundOverlay(g, W, H) {
     img.data[p] = 190; img.data[p + 1] = 40; img.data[p + 2] = 150; img.data[p + 3] = Math.min(230, 90 + (c - 2) * 45);
   }
   octx.putImageData(img, 0, 0); g.imageSmoothingEnabled = false; g.drawImage(oc, 0, 0, W, H);
+}
+// 目前情境、目前時刻的堤內積水（≥ 0.15 m）與官方模擬圖的比較
+function inundCompare() {
+  if (!inundOn()) return "";
+  const grid = inundCells(inundCaseKey()); if (!grid) return "";
+  if (!FLOW.result) return "二維水流計算完成後，這裡會顯示本情境與官方模擬圖的面積、命中率比較。";
+  const L = FLOW.result.h.length - 1, h = FLOW.result.h[Math.min(tIdx, L)], A = DEM.d * DEM.d / 1e4;
+  let off = 0, mod = 0, both = 0;
+  for (let k = 0; k < h.length; k++) {
+    if (DEM.mask[k] !== 1) continue;
+    const o = grid[k] >= 2, m = h[k] >= 0.15;
+    if (o) off++; if (m) mod++; if (o && m) both++;
+  }
+  const hit = off ? Math.round(both / off * 100) : 0, iou = (off + mod - both) ? (both / (off + mod - both)).toFixed(2) : "—";
+  return `${hhmm(frames[tIdx].t)}：本情境堤內積水 ≥ 0.15 m <b class="num">${(mod * A).toFixed(0)}</b> 公頃；官方 ${inundCaseKey()} mm/h 圖 <b class="num">${(off * A).toFixed(0)}</b> 公頃；官方積水格中本模型也積水的比例 <b class="num">${hit}%</b>，IoU <b class="num">${iou}</b>。面積量級可比，位置重疊通常只有一到三成（20 m 網格與集總式下水道抓不到街道尺度低點）。`;
 }
 function inundLabel(k) {
   if (!inundOn()) return "";
