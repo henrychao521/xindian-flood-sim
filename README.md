@@ -41,6 +41,12 @@ scripts/run_checks.sh [id …]              # 以上全部＋tests/region_check.
 - 颱風預報換算（合理化公式估算新店溪洪峰，只有新店溪頁面）
 - 疏散門缺少 OSM 資料的河段，依道路穿越堤線處推定位置（頁面上註明）
 
+## 在 Colab 重跑
+
+`colab/run_all.ipynb`（[在 Colab 開啟](https://colab.research.google.com/github/henrychao521/xindian-flood-sim/blob/main/colab/run_all.ipynb)）會掛載 Drive 當快取、安裝 Playwright 與 three.js、從 sheethub/tpe3d 取建物、拼接 DEM，然後跑 `scripts/run_checks.sh` 重建所有河段的資料、頁面、情境檢查與水利處積水模擬圖對照，最後推到分支 `colab-results`。需要在 Colab Secrets 放 `GH_TOKEN`。不需要 GPU，全程約 2–3 小時（OSM 下載佔多數，第二次有快取）。
+
+repo 內已含重跑所需的原始資料：內政部 20 m DEM（zip）、抽水站、疏散門、水利處降雨積水模擬圖（KML）。只有 OSM 分塊（約 1.3 GB，由 OSM API 重新下載）與 sheethub/tpe3d 建物（72 MB，由其 repo 取得）不放在這裡。
+
 ## 資料來源與授權
 
 - 地形：內政部國土測繪中心 2025 年 20 m DEM，政府資料開放授權條款第 1 版
