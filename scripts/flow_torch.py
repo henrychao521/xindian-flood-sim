@@ -254,6 +254,6 @@ def sweep(rid, device, outdir):
 
 if __name__ == "__main__":
     cmd, rid = sys.argv[1], sys.argv[2]
-    device = "cuda" if "--device" in sys.argv and sys.argv[sys.argv.index("--device") + 1] == "cuda" else ("cuda" if torch.cuda.is_available() else "cpu")
+    device = sys.argv[sys.argv.index("--device") + 1] if "--device" in sys.argv else ("cuda" if torch.cuda.is_available() else "cpu")  # cuda / mps / cpu
     out = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else str(ROOT / "work/sweep")
     {"validate": lambda: validate(rid, device), "validate-river": lambda: validate_river(rid, device), "river": lambda: river(rid, device, out)}.get(cmd, lambda: sweep(rid, device, out))()

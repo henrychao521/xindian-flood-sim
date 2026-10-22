@@ -57,7 +57,7 @@ for r in regs:
     sw = sweep_summary(r["id"])
     if sw: r["sweep"] = sw
     rv = river_summary(r["id"])
-    if rv: r["river"] = rv
+    if rv: r["riversweep"] = rv  # 不能叫 river：那是河名
 # 只裁出有資料的範圍（臺北市界外為 NaN）
 rows = np.where(~np.isnan(G).all(axis=1))[0]; cols = np.where(~np.isnan(G).all(axis=0))[0]
 r0, r1, c0, c1 = rows[0], rows[-1] + 1, cols[0], cols[-1] + 1
@@ -104,8 +104,8 @@ for r in regs:
         sw = r["sweep"]
         stats += (f'<dl class="res"><div><dt>GPU 情境集合尖峰（1 h）78.8／100／130 mm/h</dt><dd class="num">{sw["peak"]["78.8"]:.0f}／{sw["peak"]["100"]:.0f}／{sw["peak"]["130"]:.0f} ha</dd></div>'
                   + (f'<div><dt>抽水可用率 30%・100 mm/h</dt><dd class="num">{sw["pump30_100"]:.0f} ha</dd></div>' if sw["pump30_100"] is not None else "") + '</dl>')
-    if r.get("river"):
-        rv = r["river"]
+    if r.get("riversweep"):
+        rv = r["riversweep"]
         stats += (f'<dl class="res"><div><dt>水門失效集合・{esc(rv["key"])}未關 {rv["qlabel"]}（潮位 1.6 m）尖峰</dt><dd class="num">{rv["peaks"][0]:.0f}／{rv["peaks"][1]:.0f}／{rv["peaks"][2]:.0f} ha</dd></div>'
                   f'<div><dt>{rv["overtop_label"]}（只越堤）</dt><dd class="num">{rv["overtop"]:.0f} ha</dd></div></dl>')
     cards.append(f'''      <a class="card" href="{r["href"]}">

@@ -51,7 +51,7 @@ python3 scripts/mosaic.py          # → work/taipei_dem20.npz
 - 任何模型改動都要跑 bash scripts/run_checks.sh（或單一河段），確認 errors [] 與 mobile sw 400，再把結果寫進 docs/STAGES.md 新階段。
 - 每個階段完成就 commit 並 push 到 main；資料備份在 data/raw 與 data/processed。
 - 不要把 PDF 或 OSM 原始檔放進 repo。
-目前的下一步候選：（1）山區河段加入排水溪流（磺溪、內溝溪、雙溪）讓降雨積水不致高估；（2）用更細的地形（5 m DEM）重做街道低點；（3）歷史事件（2001 納莉颱風）情境；（4）情境集合擴到洩洪與水門失效情境（flow_torch.py 目前只處理水門關閉的內水型）。
+目前的下一步候選：（1）山區河段加入排水溪流（磺溪、內溝溪、雙溪）讓降雨積水不致高估；（2）用更細的地形（5 m DEM）重做街道低點；（3）歷史事件（2001 納莉颱風）情境；（4）情境集合（階段 9、10）目前的水門組合只有全關、單一門、全部未關，可擴到多門組合與封堵時間。
 ```
 
 ## 4. Colab

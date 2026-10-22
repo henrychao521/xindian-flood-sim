@@ -36,10 +36,13 @@ SKIP_DATA=1 scripts/run_checks.sh [id …]  # 只改 src/ 時：跳過 build_reg
 NODE_PATH=$(npm root -g) node scripts/dump_flow_input.js work/checks/t_<id>.html <id>   # 擷取頁面送進二維水流的輸入 → work/flow_in/<id>.json（repo 內有壓縮版）
 python3 scripts/flow_torch.py validate <id>              # PyTorch 移植版 vs 瀏覽器（短延時暴雨 100 mm/h）
 python3 scripts/flow_torch.py sweep <id> --device cuda   # 128 個降雨情境（強度×延時×排水設定）→ work/sweep/<id>_sweep.json、<id>_maps.json
-python3 scripts/sweep_table.py                           # 結果表（docs/STAGES.md 階段 9）
+python3 scripts/flow_torch.py validate-river <id>        # 水門入流／越堤 vs 瀏覽器（關鍵水門未關情境）
+python3 scripts/flow_torch.py river <id> --device cuda   # 洪水規模×潮位×水門失效組合 → <id>_river.json、<id>_river_maps.json
+bash colab/sweep_perregion.sh NAME "<id> <id>" work/sweep/X [sweep|river]   # 從 Studio 用 Colab CLI 跑，一個河段一次 exec、做完立刻下載
+python3 scripts/sweep_table.py                           # 結果表（docs/STAGES.md 階段 9、10）
 ```
 
-在 Colab 上跑：`colab/sweep_gpu.py`（一個河段 8–30 分鐘，L4）。從 Studio 以 Colab CLI 執行用 `colab/sweep_perregion.sh`：一個河段一次 `colab exec`、做完立刻下載（`colab exec` 長時間會斷線、沒有連線的 VM 會被收回，見 `docs/STAGES.md` 階段 9）。結果放到 `data/processed/<id>/sweep.json` 與 `sweep_maps.json` 後重建頁面，頁面就會多出「降雨強度與淹水面積」面板和「淹水門檻／淹水機率／最大水深包絡」圖層。
+在 Colab 上跑：`colab/sweep_gpu.py`（一個河段 8–30 分鐘，L4）。從 Studio 以 Colab CLI 執行用 `colab/sweep_perregion.sh`：一個河段一次 `colab exec`、做完立刻下載（`colab exec` 長時間會斷線、沒有連線的 VM 會被收回，見 `docs/STAGES.md` 階段 9）。結果放到 `data/processed/<id>/sweep.json` 與 `sweep_maps.json` 後重建頁面，頁面就會多出「降雨強度與淹水面積」面板和「淹水門檻／淹水機率／最大水深包絡」圖層；`river.json`、`river_maps.json` 則加上「洪水規模與淹水面積：水門失效」圖與「水門失效包絡」圖層。
 
 ## 功能
 
@@ -49,7 +52,7 @@ python3 scripts/sweep_table.py                           # 結果表（docs/STAG
 - 雨水下水道（78.8 mm/hr）與抽水站（45–60 mm/hr）排水模型
 - OpenStreetMap 道路、橋樑、公共設施淹水狀態
 - 疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足
-- GPU 降雨情境集合（`scripts/flow_torch.py`，二維水流的 PyTorch 移植，在 Colab 批次計算 128 個強度×延時×排水情境）：每頁有強度–面積曲線、淹水門檻圖（多大的雨會淹到這裡）、淹水機率與最大水深包絡圖層
+- GPU 情境集合（`scripts/flow_torch.py`，二維水流的 PyTorch 移植，在 Colab 批次計算）：128 個降雨強度×延時×排水情境，以及洪水規模×潮位×水門失效組合；每頁有強度–面積與洪水規模–面積曲線、淹水門檻圖（多大的雨會淹到這裡）、淹水機率、最大水深包絡與各水門失效包絡圖層
 - 可疊上臺北市水利處「降雨積水模擬圖」（112 年版，78.8／100／130 mm/h）對照；`scripts/compare_inundation.py` 計算面積、命中率與 IoU
 - 颱風預報換算（合理化公式估算新店溪洪峰，只有新店溪頁面）
 - 疏散門缺少 OSM 資料的河段，依道路穿越堤線處推定位置（頁面上註明）
