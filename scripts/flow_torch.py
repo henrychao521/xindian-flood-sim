@@ -21,6 +21,12 @@ DRAIN = [  # (名稱, 下水道收水 mm/hr, 抽水 mm/hr, 可用率 %)
 
 def b64arr(s, dtype): return np.frombuffer(base64.b64decode(s), dtype=dtype).copy()
 def load(rid):
+    inp = _load(rid)
+    sp = ROOT / "data/processed" / rid / "streams.json"  # 山區明渠溪流（scripts/build_streams.py）
+    inp["stream"] = json.loads(sp.read_text())["cells"] if sp.exists() else []
+    return inp
+
+def _load(rid):
     p = ROOT / "work/flow_in" / f"{rid}.json"
     if p.exists(): return json.loads(p.read_text())
     import gzip
@@ -65,6 +71,10 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
     gActive = nG > 0 and any(n > 0 for n in nCells) and (bool(openG.any()) or bool((zrG > gLevee[None, :, None]).any()))
     flatIdx = cellIdx.flatten()[None, :].expand(B, -1)  # (B, nG*25)
     qAcc = torch.zeros(B, nG, device=dev, dtype=torch.float32 if dev.type == "mps" else torch.float64)
+    # 山區溪流：溪流格水面高於河道水位時，水直接排入溪流（同 flow.js）
+    strIdx = torch.tensor(inp.get("stream", []), device=dev, dtype=torch.long)
+    strOn = torch.tensor([bool(s.get("streams", True)) for s in scen], device=dev)
+    zStr = z.flatten()[strIdx] if strIdx.numel() else None
     def weir(Cc, Bw, up, dn, crest):
         sgn = torch.where(up >= dn, 1.0, -1.0); hi = torch.maximum(up, dn); lo = torch.minimum(up, dn)
         h1 = hi - crest; h2 = torch.clamp(lo - crest, min=0)
@@ -148,6 +158,10 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
         facc = fac[:, cIdxv]
         hv = torch.clamp(hv - take * facc / psiA.flatten()[valid][None, :], min=0)
         hh = h.reshape(B, N).clone(); hh[:, valid] = hv
+        if zStr is not None:
+            hs = hh[:, strIdx]; zrNow = interp(zrOut, t)
+            dr = (hs > 0) & (zStr[None, :] + hs > zrNow[:, None]) & strOn[:, None]
+            hh[:, strIdx] = torch.where(dr, torch.zeros_like(hs), hs)
         # 水門入流（含潛沒與回流）、越堤：入口格周邊 5×5 的堤內格平均分攤（所有水門一次算）
         if gActive:
             allow_open = closeAt >= inp["simHours"] or t < closeAt * 3600
