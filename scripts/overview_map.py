@@ -44,9 +44,20 @@ def sweep_summary(rid):  # Colab GPU 情境集合：1 h 定強度、設計排水
     d = {I: pick("design", I) for I in (78.8, 100, 130)}; p30 = pick("pump30", 100)
     if not all(d.values()): return None
     return {"peak": {str(I): d[I]["area_peak"] for I in d}, "pump30_100": p30["area_peak"] if p30 else None, "n": len(sc)}
+def river_summary(rid):  # 水門失效情境集合：關鍵水門未關在三種洪水規模（潮位 1.6 m）的尖峰面積，與最大洪水＋暴潮、水門全關（只越堤）
+    rf = ROOT / f"data/processed/{rid}/river.json"
+    if not rf.exists(): return None
+    rv = json.loads(rf.read_text(encoding="utf-8")); sc = rv["scenarios"]; Qs = rv["Qpeaks"]; kg = f"g{rv['keyGate']}"
+    pick = lambda Q, td, g: next((s for s in sc if s["Qpeak"] == Q and s["tide"] == td and s["gates"] == g), None)
+    qs = [Qs[1], Qs[2], Qs[-1]]; ks = [pick(Q, 1.6, kg) for Q in qs]; ov = pick(Qs[-1], 2.0, "none")
+    if not all(ks) or not ov: return None
+    lab = "／".join(f"{Q}%" if rv["qUnit"] == "%" else f"{Q:,}" for Q in qs) + ("" if rv["qUnit"] == "%" else " m³/s")
+    return {"key": rv["gateNames"][rv["keyGate"]], "qlabel": lab, "peaks": [k["area_peak"] for k in ks], "overtop": ov["area_peak"], "overtop_label": (f"{Qs[-1]}%" if rv["qUnit"] == "%" else f"{Qs[-1]:,} m³/s") + "＋暴潮 2.0 m、水門全關"}
 for r in regs:
     sw = sweep_summary(r["id"])
     if sw: r["sweep"] = sw
+    rv = river_summary(r["id"])
+    if rv: r["river"] = rv
 # 只裁出有資料的範圍（臺北市界外為 NaN）
 rows = np.where(~np.isnan(G).all(axis=1))[0]; cols = np.where(~np.isnan(G).all(axis=0))[0]
 r0, r1, c0, c1 = rows[0], rows[-1] + 1, cols[0], cols[-1] + 1
@@ -93,6 +104,10 @@ for r in regs:
         sw = r["sweep"]
         stats += (f'<dl class="res"><div><dt>GPU 情境集合尖峰（1 h）78.8／100／130 mm/h</dt><dd class="num">{sw["peak"]["78.8"]:.0f}／{sw["peak"]["100"]:.0f}／{sw["peak"]["130"]:.0f} ha</dd></div>'
                   + (f'<div><dt>抽水可用率 30%・100 mm/h</dt><dd class="num">{sw["pump30_100"]:.0f} ha</dd></div>' if sw["pump30_100"] is not None else "") + '</dl>')
+    if r.get("river"):
+        rv = r["river"]
+        stats += (f'<dl class="res"><div><dt>水門失效集合・{esc(rv["key"])}未關 {rv["qlabel"]}（潮位 1.6 m）尖峰</dt><dd class="num">{rv["peaks"][0]:.0f}／{rv["peaks"][1]:.0f}／{rv["peaks"][2]:.0f} ha</dd></div>'
+                  f'<div><dt>{rv["overtop_label"]}（只越堤）</dt><dd class="num">{rv["overtop"]:.0f} ha</dd></div></dl>')
     cards.append(f'''      <a class="card" href="{r["href"]}">
         <h2>{esc(r["title"])}</h2>
         <p>{esc(r.get("districts", "萬華、中正、大安"))}・{esc(r["river"])}</p>

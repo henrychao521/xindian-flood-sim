@@ -19,3 +19,20 @@ print("| 河段 | 78.8 mm/h | 100 mm/h（T+4 h／尖峰） | 130 mm/h | 200 mm/h
 print("|---|---|---|---|---|---|---|---|---|---|")
 for name, d, p30, s50, h3, off, sw in rows:
     print(f"| {name} | {d[78.8]['area_peak']:.0f} | {d[100]['area_4h']:.0f}／{d[100]['area_peak']:.0f} | {d[130]['area_peak']:.0f} | {d[200]['area_peak']:.0f} | {p30['area_peak']:.0f} | {s50['area_peak']:.0f} | {h3['area_peak']:.0f} | {off.get('100', float('nan')):.0f}／{off.get('130', float('nan')):.0f} | {sw['seconds']} |")
+
+# ---- 水門失效情境集合（river.json）----
+print()
+print("| 河段 | 關鍵水門 | 關鍵門未關：Q₁／Q₂／Q₃／Q₄／Q₅（潮位 1.6 m）尖峰 ha | 所有門未關 Q₃ | 全關 Q₅＋暴潮（越堤） | 關鍵門 Q₃：暴潮 2.0 − 潮位 1.0 | GPU 秒數 |")
+print("|---|---|---|---|---|---|---|")
+for rid, name in NAMES.items():
+    f = ROOT / f"data/processed/{rid}/river.json"
+    if not f.exists(): continue
+    rv = json.loads(f.read_text()); sc = rv["scenarios"]; Qs = rv["Qpeaks"]; kg = f"g{rv['keyGate']}"
+    pick = lambda Q, td, g: next((s for s in sc if s["Qpeak"] == Q and s["tide"] == td and s["gates"] == g), None)
+    ks = [pick(Q, 1.6, kg) for Q in Qs]
+    if not all(ks): continue
+    qlab = "／".join(str(Q) for Q in Qs) + ("%" if rv["qUnit"] == "%" else " m³/s")
+    a20, a10 = pick(Qs[2], 2.0, kg), pick(Qs[2], 1.0, kg)
+    peaks = "／".join(f"{k['area_peak']:.0f}" for k in ks); allq = pick(Qs[2], 1.6, "all"); ov = pick(Qs[-1], 2.0, "none")
+    tide_eff = f"{a20['area_peak'] - a10['area_peak']:+.0f}" if a20 and a10 else "—"
+    print(f"| {name} | {rv['gateNames'][rv['keyGate']]} | {qlab}：{peaks} | {allq['area_peak'] if allq else float('nan'):.0f} | {ov['area_peak'] if ov else float('nan'):.0f} | {tide_eff} | {rv['seconds']} |")

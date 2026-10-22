@@ -49,14 +49,21 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
     openG = torch.tensor([[bool(s.get("open", [g["open"] for g in G])[gi]) for gi in range(nG)] for s in scen], device=dev)
     zrG = torch.tensor([s.get("zr", [g["zr"] for g in G]) for s in scen], device=dev, dtype=f32)   # (B, nG, nF)
     C_w, openPct, closeAt = float(inp["C"]), float(inp["openPct"]), float(inp["closeAt"])
-    gateCells = []
-    for gt in G:
+    # 每座門入口格周邊 5×5 的堤內格，補齊成 (nG, 25)（-1 → 不用），一次向量化處理所有水門
+    cellsPad = torch.full((max(nG, 1), 25), -1, dtype=torch.long); nCells = []
+    for gi, gt in enumerate(G):
         k0 = gt["entry"]; i0, j0 = k0 % nx, k0 // nx; cells = []
         for a in range(-2, 3):
             for b in range(-2, 3):
                 i, j = i0 + a, j0 + b
                 if 0 <= i < nx and 0 <= j < ny and mask[j, i] == 1: cells.append(j * nx + i)
-        gateCells.append(torch.tensor(cells, device=dev, dtype=torch.long))
+        cellsPad[gi, :len(cells)] = torch.tensor(cells, dtype=torch.long); nCells.append(len(cells))
+    cellsPad = cellsPad.to(dev); cellOk = (cellsPad >= 0); cellIdx = torch.where(cellOk, cellsPad, torch.zeros_like(cellsPad))  # (nG, 25)
+    gW = torch.tensor([gt["width"] for gt in G], device=dev, dtype=f32); gSill = torch.tensor([gt["sill"] for gt in G], device=dev, dtype=f32); gLevee = torch.tensor([gt["levee"] for gt in G], device=dev, dtype=f32)
+    zCells = z.flatten()[cellIdx][None]  # (1, nG, 25)
+    psCells = (psi * A).flatten()[cellIdx] * cellOk.to(f32); gCap = psCells.sum(1)  # (nG,)
+    gActive = nG > 0 and any(n > 0 for n in nCells) and (bool(openG.any()) or bool((zrG > gLevee[None, :, None]).any()))
+    flatIdx = cellIdx.flatten()[None, :].expand(B, -1)  # (B, nG*25)
     qAcc = torch.zeros(B, nG, device=dev, dtype=torch.float32 if dev.type == "mps" else torch.float64)
     def weir(Cc, Bw, up, dn, crest):
         sgn = torch.where(up >= dn, 1.0, -1.0); hi = torch.maximum(up, dn); lo = torch.minimum(up, dn)
@@ -141,22 +148,21 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
         facc = fac[:, cIdxv]
         hv = torch.clamp(hv - take * facc / psiA.flatten()[valid][None, :], min=0)
         hh = h.reshape(B, N).clone(); hh[:, valid] = hv
-        # 水門入流（含潛沒與回流）、越堤：入口格周邊 5×5 的堤內格平均分攤
-        if openG.any() or (zrG > torch.tensor([gt["levee"] for gt in G], device=dev)[None, :, None]).any():
+        # 水門入流（含潛沒與回流）、越堤：入口格周邊 5×5 的堤內格平均分攤（所有水門一次算）
+        if gActive:
             allow_open = closeAt >= inp["simHours"] or t < closeAt * 3600
-            for gi, gt in enumerate(G):
-                cells = gateCells[gi]
-                if cells.numel() == 0: continue
-                zr = interp(zrG[:, gi], t); hc = hh[:, cells]; zc = z.flatten()[cells][None, :]
-                w = torch.where(hc > 0.01, hc, torch.zeros_like(hc)); ws = w.sum(1)
-                eta = torch.where(ws > 0, ((zc + hc) * w).sum(1) / torch.clamp(ws, min=1e-9), torch.full_like(ws, -99.0))
-                psc = psiA.flatten()[cells]; vol = (hc * psc[None, :]).sum(1); cap = float(psc.sum())
-                Q = torch.zeros(B, device=dev, dtype=f32)
-                if allow_open: Q = Q + openG[:, gi].to(f32) * weir(C_w, gt["width"] * openPct / 100, zr, eta, gt["sill"])
-                Q = Q + (zr > gt["levee"]).to(f32) * weir(1.7, 150.0, zr, eta, gt["levee"])
-                Q = torch.where(Q < 0, -torch.minimum(-Q, vol * 0.5 / dt), Q)
-                qAcc[:, gi] += (Q * dt).to(qAcc.dtype)
-                hh[:, cells] = torch.clamp(hc + (Q * dt / cap)[:, None], min=0)
+            zr = interp(zrG, t)  # (B, nG)
+            hc = hh[:, cellIdx] * cellOk.to(f32)[None]  # (B, nG, 25)
+            w = torch.where(hc > 0.01, hc, torch.zeros_like(hc)); ws = w.sum(2)
+            eta = torch.where(ws > 0, ((zCells + hc) * w).sum(2) / torch.clamp(ws, min=1e-9), torch.full_like(ws, -99.0))
+            vol = (hc * psCells[None]).sum(2)
+            Q = (zr > gLevee[None]).to(f32) * weir(1.7, 150.0, zr, eta, gLevee[None])
+            if allow_open: Q = Q + openG.to(f32) * weir(C_w, gW[None] * openPct / 100, zr, eta, gSill[None])
+            Q = torch.where(Q < 0, -torch.minimum(-Q, vol * 0.5 / dt), Q)
+            qAcc += (Q * dt).to(qAcc.dtype)
+            per = (Q * dt / torch.clamp(gCap[None], min=1e-9))[:, :, None].expand(-1, -1, 25) * cellOk.to(f32)[None]  # (B, nG, 25)
+            hh = hh.index_add(1, flatIdx[0], per.reshape(B, -1))
+            hh = torch.clamp(hh, min=0)
         h = hh.reshape(B, ny, nx)
         t += dt; step += 1
     out["hmax"] = hmaxEnv.cpu().numpy(); out["steps"] = step; out["seconds"] = time.time() - t0; out["inflow_m3"] = qAcc.cpu().numpy()

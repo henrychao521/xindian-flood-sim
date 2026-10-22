@@ -23,10 +23,20 @@ function threshGrid() {
   }
   return SWEEP.grids.thresh;
 }
-function sweepLayerKey() { const s = $("sweepLayer"); if (!s || s.value === "none") return null; return s.value === "prob" ? "prob" : s.value === "thresh" ? "thresh" : "hmax:" + $("sweepCase").value; }
+// 洩洪／水門失效情境集合（RIVER_DATA）：maps.hmax_cm 依水門組合（none／g0…／all）＋ hmax_cm_none_max（最大洪水＋暴潮、水門全關）
+function riverAvailable() { return typeof RIVER_DATA !== "undefined" && !!RIVER_DATA && Array.isArray(RIVER_DATA.scenarios); }
+function riverGrid(name) {
+  if (!riverAvailable() || !RIVER_DATA.maps) return null;
+  const key = "gate:" + name;
+  if (!SWEEP.grids[key]) { const s = name === "overtop" ? RIVER_DATA.maps.hmax_cm_none_max : RIVER_DATA.maps.hmax_cm[name]; if (!s) return null; const b = atob(s), u = new Uint8Array(b.length); for (let k = 0; k < b.length; k++) u[k] = b.charCodeAt(k); SWEEP.grids[key] = u; }
+  return SWEEP.grids[key];
+}
+function riverGateLabel(name) { return name === "none" ? "水門全關（只有越堤）" : name === "all" ? "所有水門未關" : name === "overtop" ? "最大洪水＋暴潮、水門全關" : (RIVER_DATA.gateNames[+name.slice(1)] || name) + "未關"; }
+function qText(Q) { return RIVER_DATA.qUnit === "%" ? `計畫洪峰 ${Q}%` : `${Q.toLocaleString("zh-TW")} m³/s`; }
+function sweepLayerKey() { const s = $("sweepLayer"); if (!s || s.value === "none") return null; return s.value === "prob" ? "prob" : s.value === "thresh" ? "thresh" : s.value === "gate" ? "gate:" + $("sweepGate").value : "hmax:" + $("sweepCase").value; }
 function drawSweepOverlay(g, W, H) {
   const key = sweepLayerKey(); if (!key) return;
-  const grid = key === "thresh" ? threshGrid() : sweepGrid(key); if (!grid) return;
+  const grid = key === "thresh" ? threshGrid() : key.startsWith("gate:") ? riverGrid(key.slice(5)) : sweepGrid(key); if (!grid) return;
   const oc = document.createElement("canvas"); oc.width = DEM.nx; oc.height = DEM.ny;
   const octx = oc.getContext("2d"), img = octx.createImageData(DEM.nx, DEM.ny), prob = key === "prob", th = key === "thresh", tc = THRESH_COLORS.map(hexToRgb);
   for (let j = 0; j < DEM.ny; j++) for (let i = 0; i < DEM.nx; i++) {
@@ -44,6 +54,8 @@ function sweepLabel(k) {
   let s = "";
   const tg = threshGrid(); if (tg) { const Is = sweepThreshIs(); s += `・1 h 定強度淹水門檻：${tg[k] ? `<b class="num">${Is[tg[k] - 1]}</b> mm/h 就積水 ≥ 0.15 m` : `${Is[Is.length - 1]} mm/h 以內不積水`}`; }
   if (pr) s += `・情境集合淹水機率 <b class="num">${pr[k]}%</b>（${SWEEP_DATA.maps.prob_n} 個情境中最大水深 ≥ 0.15 m 的比例）`;
+  const gsel = $("sweepGate"), rg = gsel && gsel.value ? riverGrid(gsel.value) : null;
+  if (rg) s += `・${riverGateLabel(gsel.value)}（${gsel.value === "overtop" ? qText(RIVER_DATA.Qpeaks[RIVER_DATA.Qpeaks.length - 1]) + "、潮位 2.0 m" : qText(RIVER_DATA.maps.Qpeak) + `、潮位 ${RIVER_DATA.maps.tide} m`}）最大水深 ${rg[k] >= 1 ? `<b class="num">${(rg[k] / 100).toFixed(2)}</b> m` : "—"}`;
   if (hm) s += `・${$("sweepCase").value} mm/h・1 h 最大水深 ${hm[k] >= 1 ? `<b class="num">${(hm[k] / 100).toFixed(2)}</b> m` : "< 0.01 m"}`;
   return s;
 }
@@ -61,7 +73,7 @@ const DRAIN_LABEL = { design: "設計排水（下水道 78.8、抽水 60 mm/hr�
 const DUR_COLORS = ["#2a9d8f", "#0e6a86", "#e9a23b", "#c0392b"];
 function renderSweepPanel() {
   const svg = $("sweepChart"); if (!svg) return;
-  if (!sweepAvailable()) { const sec = $("sweepPanel"); if (sec) sec.hidden = true; return; }
+  if (!sweepAvailable()) return;
   const dsel = $("sweepDrain");
   if (!dsel.options.length) { SWEEP_DATA.drain.forEach(d => { const o = document.createElement("option"); o.value = d.id; o.textContent = DRAIN_LABEL[d.id] || d.id; dsel.appendChild(o); }); }
   const dr = dsel.value || SWEEP_DATA.drain[0].id, metric = $("sweepMetric").value;  // peak | t4h | deep
@@ -94,8 +106,61 @@ function renderSweepPanel() {
   else nowEl.textContent = "";
   const meta = $("sweepMeta"); if (meta) meta.textContent = `${SWEEP_DATA.scenarios.length} 個情境・${SWEEP_DATA.device === "cuda" ? "Colab GPU" : SWEEP_DATA.device}・${SWEEP_DATA.steps.toLocaleString("zh-TW")} 步・${SWEEP_DATA.seconds} 秒`;
 }
+const GATE_COLORS = ["#0e6a86", "#c0392b", "#e9a23b", "#2a9d8f", "#7b4fa0", "#8a6d3b", "#d64d8a", "#3b82f6", "#5c8d3a", "#444"];
+function riverNearest(p) {
+  if (!riverAvailable()) return null;
+  const Q = RIVER_DATA.Qpeaks.slice().sort((a, b) => Math.abs(a - p.Qpeak) - Math.abs(b - p.Qpeak))[0];
+  const td = RIVER_DATA.tides.slice().sort((a, b) => Math.abs(a - p.tide) - Math.abs(b - p.tide))[0];
+  const open = GATES.map((g, i) => p.gateOpen[g.id] ? i : -1).filter(i => i >= 0);
+  const name = open.length === 0 ? "none" : open.length === GATES.length ? "all" : open.length === 1 ? "g" + open[0] : null;
+  if (!name) return { partial: true, open };
+  const sc = RIVER_DATA.scenarios.find(s => s.Qpeak === Q && s.tide === td && s.gates === name);
+  return sc ? { ...sc, exact: Q === p.Qpeak && td === p.tide && p.rain === RIVER_DATA.rain } : null;
+}
+function renderRiverPanel() {
+  const svg = $("riverChart"); if (!svg) return;
+  const box0 = $("riverBox"); if (!riverAvailable()) { if (box0) box0.hidden = true; return; }
+  box0.hidden = false;
+  const tsel = $("riverTide");
+  if (!tsel.options.length) RIVER_DATA.tides.forEach(td => { const o = document.createElement("option"); o.value = td; o.textContent = `潮位 ${td.toFixed(1)} m`; if (td === 1.6) o.selected = true; tsel.appendChild(o); });
+  const td = +tsel.value, metric = $("riverMetric").value, val = s => metric === "t4h" ? s.area_4h : metric === "deep" ? s.deep_peak : s.area_peak;
+  const rows = RIVER_DATA.scenarios.filter(s => s.tide === td), Qs = RIVER_DATA.Qpeaks, names = ["none", ...RIVER_DATA.gateNames.map((_, i) => "g" + i), "all"];
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const Wd = 600, Ht = 320, box = { l: 50, r: Wd - 14, t: 18, b: Ht - 44 };
+  svg.setAttribute("viewBox", `0 0 ${Wd} ${Ht}`);
+  let ymax = Math.max(1, ...rows.map(val));
+  const step = ymax > 2000 ? 500 : ymax > 800 ? 200 : ymax > 300 ? 100 : ymax > 120 ? 50 : ymax > 40 ? 20 : ymax > 12 ? 5 : 2; ymax = Math.ceil(ymax / step) * step;
+  const X = Q => box.l + (Q - Qs[0]) / (Qs[Qs.length - 1] - Qs[0]) * (box.r - box.l), Y = v => box.b - v / ymax * (box.b - box.t);
+  for (let v = 0; v <= ymax + 1e-9; v += step) { el("line", { x1: box.l, x2: box.r, y1: Y(v), y2: Y(v), class: "grid-line" }, svg); txt(svg, box.l - 6, Y(v) + 4, String(v), { "text-anchor": "end" }); }
+  Qs.forEach(Q => { el("line", { x1: X(Q), x2: X(Q), y1: box.b, y2: box.b + 4, class: "axis-line" }, svg); txt(svg, X(Q), box.b + 16, RIVER_DATA.qUnit === "%" ? Q + "%" : Q.toLocaleString("zh-TW"), { "text-anchor": "middle" }); });
+  el("line", { x1: box.l, x2: box.r, y1: box.b, y2: box.b, class: "axis-line" }, svg);
+  txt(svg, (box.l + box.r) / 2, Ht - 6, RIVER_DATA.qUnit === "%" ? "洪水規模（計畫洪峰流量 %）" : "上游洪峰流量 m³/s", { "text-anchor": "middle" });
+  txt(svg, box.l - 6, box.t - 4, metric === "deep" ? "≥ 0.5 m 尖峰公頃" : "公頃", { "text-anchor": "end" });
+  const legend = [];
+  names.forEach((nm, ni) => {
+    const pts = Qs.map(Q => { const s = rows.find(r => r.Qpeak === Q && r.gates === nm); return s ? [X(Q), Y(val(s))] : null; }).filter(Boolean); if (!pts.length) return;
+    const col = nm === "none" ? "#666" : nm === "all" ? "#111" : GATE_COLORS[(ni - 1) % GATE_COLORS.length], key = nm === "g" + RIVER_DATA.keyGate;
+    el("path", { d: pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" "), fill: "none", stroke: col, "stroke-width": key || nm === "all" ? 2.6 : 1.6, "stroke-dasharray": nm === "none" ? "4 3" : "" }, svg);
+    pts.forEach(p => el("circle", { cx: p[0], cy: p[1], r: 2.4, fill: col }, svg));
+    legend.push(`<span><i style="background:${col};height:3px"></i>${riverGateLabel(nm).replace("（只有越堤）", "")}</span>`);
+  });
+  if (P.Qpeak >= Qs[0] && P.Qpeak <= Qs[Qs.length - 1]) { const x = X(P.Qpeak); el("line", { x1: x, x2: x, y1: box.t, y2: box.b, stroke: "var(--ink)", "stroke-dasharray": "3 4" }, svg); txt(svg, x + 4, box.t + 10, `目前 ${qText(P.Qpeak)}`, { class: "t-ink" }); }
+  $("riverLegend").innerHTML = legend.join("");
+  const near = riverNearest(P), nowEl = $("riverNow");
+  if (near && near.partial) nowEl.textContent = `目前開了 ${near.open.length} 座水門；集合只含「全關」「單一水門未關」「全部未關」三類組合。`;
+  else if (near) nowEl.innerHTML = `目前頁面（${qText(P.Qpeak)}・潮位 ${fmt(P.tide, 1)} m・${riverGateLabel(near.gates)}）${near.exact ? "就是" : "最接近"}集合中的「${qText(near.Qpeak)}・潮位 ${near.tide.toFixed(1)} m」：尖峰淹水 <b class="num">${near.area_peak.toFixed(0)}</b> 公頃（T+${near.t_peak_h.toFixed(1)} h）・4 小時 <b class="num">${near.area_4h.toFixed(0)}</b> 公頃・≥ 0.5 m 尖峰 <b class="num">${near.deep_peak.toFixed(0)}</b> 公頃・8 小時灌入 <b class="num">${(near.inflow_m3.reduce((a, b) => a + b, 0) / 1e4).toFixed(0)}</b> 萬 m³。`;
+  else nowEl.textContent = "";
+  const meta = $("riverMeta"); if (meta) meta.textContent = `${RIVER_DATA.scenarios.length} 個情境・背景雨 ${RIVER_DATA.rain} mm/h×2 h・${RIVER_DATA.device === "cuda" ? "Colab GPU" : RIVER_DATA.device}・${RIVER_DATA.seconds} 秒`;
+}
 function bindSweep() {
-  if (!sweepAvailable()) { ["sweepPanel", "sweepCtl"].forEach(id => { const e = $(id); if (e) e.hidden = true; }); return; }
+  if (riverAvailable()) {
+    const gs = $("sweepGate"); if (gs && !gs.options.length) { Object.keys(RIVER_DATA.maps.hmax_cm).forEach(nm => { const o = document.createElement("option"); o.value = nm; o.textContent = riverGateLabel(nm); if (nm === "g" + RIVER_DATA.keyGate) o.selected = true; gs.appendChild(o); }); const o = document.createElement("option"); o.value = "overtop"; o.textContent = riverGateLabel("overtop"); gs.appendChild(o); }
+    const opt = $("sweepLayerGateOpt"); if (opt) opt.textContent = `水門失效包絡（${qText(RIVER_DATA.maps.Qpeak)}＋潮位 ${RIVER_DATA.maps.tide} m，選水門）`;
+    ["sweepGate"].forEach(id => { const e = $(id); if (e) e.addEventListener("change", () => { if (frames.length) renderContour(frames[tIdx]); }); });
+    ["riverTide", "riverMetric"].forEach(id => { const e = $(id); if (e) e.addEventListener("change", renderRiverPanel); });
+  } else { const o = $("sweepLayerGateOpt"); if (o) o.remove(); const g = $("sweepGate"); if (g) g.remove(); }
+  if (!sweepAvailable() && !riverAvailable()) { ["sweepPanel", "sweepCtl"].forEach(id => { const e = $(id); if (e) e.hidden = true; }); return; }
+  if (!sweepAvailable()) { ["sweepBox"].forEach(id => { const e = $(id); if (e) e.hidden = true; }); ["thresh", "prob", "hmax"].forEach(v => { const o = document.querySelector(`#sweepLayer option[value="${v}"]`); if (o) o.remove(); }); const c = $("sweepCase"); if (c) c.remove(); return; }
   const lg = $("sweepThreshLegend"); if (lg) { const Is = sweepThreshIs(); lg.innerHTML = "淹水門檻：" + Is.map((I, c) => `<i style="background:${THRESH_COLORS[Math.min(c, THRESH_COLORS.length - 1)]};height:8px"></i>${I}`).join(" ") + " mm/h（1 h 定強度，最小的會淹強度）"; }
   const lab = document.querySelector('label[for="sweepLayer"]'); if (lab) lab.textContent = `疊上 GPU 情境集合（${SWEEP_DATA.scenarios.length} 個降雨情境，Colab 批次計算）`;
   const cs = $("sweepCase"); if (cs && !cs.options.length) Object.keys(SWEEP_DATA.maps.hmax_cm).forEach(I => { const o = document.createElement("option"); o.value = I; o.textContent = I + " mm/h"; if (I === "100") o.selected = true; cs.appendChild(o); });

@@ -63,6 +63,12 @@ if (sd / "sweep.json").exists():
         if cf.exists(): sw["official"][case] = json.loads(r(cf))["ge15cm"]["official_ha"]
     sweep = json.dumps(sw, ensure_ascii=False, separators=(",", ":"))
 data += "const SWEEP_DATA=" + sweep + ";\n"
+river = "null"  # 洩洪／水門失效情境集合（scripts/flow_torch.py river）
+if (sd / "river.json").exists():
+    rv = json.loads(r(sd / "river.json"))
+    if (sd / "river_maps.json").exists(): rv["maps"] = json.loads(r(sd / "river_maps.json"))
+    river = json.dumps(rv, ensure_ascii=False, separators=(",", ":"))
+data += "const RIVER_DATA=" + river + ";\n"
 for a, b in [("//@@DEMDATA@@", data), ("//@@SWEEP@@", r(S / "sweep.js")), ("//@@REGIONDATA@@", regiondata), ("//@@ENGINE@@", r(S / "engine.js")), ("//@@TERRAIN@@", r(S / "terrain.js")), ("//@@FLOW@@", r(S / "flow.js") + "\n" + r(S / "osm.js"))]:
     assert a in src, a
     src = src.replace(a, b)
