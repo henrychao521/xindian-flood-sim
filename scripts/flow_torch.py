@@ -4,8 +4,10 @@
 輸入：scripts/dump_flow_input.js 擷取的 work/flow_in/<id>.json（或 data/processed/<id>/flow_input.json）。
 用法：
   python3 scripts/flow_torch.py validate <id>            # 以頁面的「短延時暴雨 100 mm/h」情境對照瀏覽器結果
-  python3 scripts/flow_torch.py sweep <id> [--device cuda] [--out DIR]   # 降雨強度×延時×排水設定的情境集合
-只處理水門關閉、河水位低於堤頂的「內水型」情境（水門入流與越堤為零）；演算法逐步對應 flow.js。
+  python3 scripts/flow_torch.py sweep <id> [--device cuda] [--out DIR]   # 降雨強度×延時×排水設定的情境集合（內水型）
+  python3 scripts/flow_torch.py validate-river <id>      # 以「關鍵水門未關」情境對照瀏覽器（水門入流、越堤）
+  python3 scripts/flow_torch.py river <id> [--device cuda] [--out DIR]   # 洪水規模×潮位×水門失效組合的情境集合
+演算法逐步對應 flow.js（含水門堰流入流、回流、越堤）。
 """
 import base64, json, sys, time, math, pathlib
 import numpy as np, torch
@@ -13,6 +15,7 @@ import numpy as np, torch
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 INTENSITIES = [40, 60, 78.8, 100, 130, 150, 180, 200]   # mm/h（定強度，前後 15 分鐘平滑，與頁面相同）
 DURATIONS = [0.5, 1, 2, 3]                               # 小時
+RIVER_RAIN = 40.0   # 洩洪情境的市區背景雨（頁面預設 40 mm/h、延時 2 h）
 DRAIN = [  # (名稱, 下水道收水 mm/hr, 抽水 mm/hr, 可用率 %)
     ("design", 78.8, 60, 100), ("pump30", 78.8, 60, 30), ("sewer50", 50, 60, 100), ("pump45", 78.8, 45, 100)]
 
@@ -41,8 +44,25 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
     psi = torch.tensor(b64arr(inp["psi_f32"], np.float32).reshape(ny, nx), device=dev)
     catch = torch.tensor(b64arr(inp["catch_i32"], np.int32).reshape(ny, nx).astype(np.int64), device=dev)
     nC = int(inp["nCatch"]); n0 = float(inp["n"])
-    for gt in inp["gates"]:
-        assert not gt["open"] and max(gt["zr"]) <= gt["levee"], "sweep only covers closed gates below the levee crest"
+    # 水門：每個情境可有自己的開關與河道水位序列（scen["open"]: nG 個 bool、scen["zr"]: nG × nF、scen["zrOut"]: nF）；沒給就用輸入檔的（全關、低水位）
+    G = inp["gates"]; nG = len(G)
+    openG = torch.tensor([[bool(s.get("open", [g["open"] for g in G])[gi]) for gi in range(nG)] for s in scen], device=dev)
+    zrG = torch.tensor([s.get("zr", [g["zr"] for g in G]) for s in scen], device=dev, dtype=f32)   # (B, nG, nF)
+    C_w, openPct, closeAt = float(inp["C"]), float(inp["openPct"]), float(inp["closeAt"])
+    gateCells = []
+    for gt in G:
+        k0 = gt["entry"]; i0, j0 = k0 % nx, k0 // nx; cells = []
+        for a in range(-2, 3):
+            for b in range(-2, 3):
+                i, j = i0 + a, j0 + b
+                if 0 <= i < nx and 0 <= j < ny and mask[j, i] == 1: cells.append(j * nx + i)
+        gateCells.append(torch.tensor(cells, device=dev, dtype=torch.long))
+    qAcc = torch.zeros(B, nG, device=dev, dtype=torch.float32 if dev.type == "mps" else torch.float64)
+    def weir(Cc, Bw, up, dn, crest):
+        sgn = torch.where(up >= dn, 1.0, -1.0); hi = torch.maximum(up, dn); lo = torch.minimum(up, dn)
+        h1 = hi - crest; h2 = torch.clamp(lo - crest, min=0)
+        q = sgn * Cc * Bw * torch.pow(torch.clamp(h1, min=0), 1.5) * torch.pow(torch.clamp(1 - torch.pow(h2 / torch.clamp(h1, min=1e-9), 1.5), min=0), 0.385)
+        return torch.where(h1 > 0, q, torch.zeros_like(q))
     # 介面孔隙率與糙度（兩側較小者）
     phx = torch.minimum(psi[:, :-1], psi[:, 1:]); phy = torch.minimum(psi[:-1, :], psi[1:, :])
     nx2 = (n0 + 0.08 * (1 - phx)) ** 2; ny2 = (n0 + 0.08 * (1 - phy)) ** 2
@@ -51,7 +71,7 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
     T = inp["simHours"] * 3600; FR = float(inp["frameSec"]); nF = int(round(T / FR)) + 1
     # 每個情境的雨量序列（frame 間線性內插）、排水參數
     rain = torch.tensor([[s["rain"] * rain_shape(k * FR / 3600, s["hours"]) for k in range(nF)] for s in scen], device=dev, dtype=f32)
-    zrOut = torch.tensor(inp["zrOut"], device=dev, dtype=f32)
+    zrOut = torch.tensor([s.get("zrOut", inp["zrOut"]) for s in scen], device=dev, dtype=f32)  # (B, nF)
     sewerMM = torch.tensor([s["sewerMM"] for s in scen], device=dev, dtype=f32)
     pumpMM = torch.tensor([s["pumpMM"] for s in scen], device=dev, dtype=f32)
     avail = torch.tensor([s["avail"] for s in scen], device=dev, dtype=f32)
@@ -110,7 +130,7 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
         h = h + torch.where(act, r[:, None, None] / psi, torch.zeros_like(h))
         # 雨水下水道 → 管網 → 抽水／重力排出（依集水區）
         intake = sewerMM / 1000 / 3600 * dt * A
-        zr = float(interp(zrOut, t)); gravity = 1.0 if zr < inp["gravityEL"] else 0.0
+        gravity = (interp(zrOut, t) < inp["gravityEL"]).to(f32)[:, None]
         hv = h.reshape(B, N)[:, valid]; take = torch.minimum(hv * psiA.flatten()[valid], intake[:, None])
         take = torch.where(hv > 0, take, torch.zeros_like(take))
         dem = torch.zeros(B, nC, device=dev, dtype=f32).index_add_(1, cIdxv, take)
@@ -120,9 +140,26 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
         sew = sew + dem * fac; o = torch.minimum(drain, sew); sew = sew - o
         facc = fac[:, cIdxv]
         hv = torch.clamp(hv - take * facc / psiA.flatten()[valid][None, :], min=0)
-        hh = h.reshape(B, N).clone(); hh[:, valid] = hv; h = hh.reshape(B, ny, nx)
+        hh = h.reshape(B, N).clone(); hh[:, valid] = hv
+        # 水門入流（含潛沒與回流）、越堤：入口格周邊 5×5 的堤內格平均分攤
+        if openG.any() or (zrG > torch.tensor([gt["levee"] for gt in G], device=dev)[None, :, None]).any():
+            allow_open = closeAt >= inp["simHours"] or t < closeAt * 3600
+            for gi, gt in enumerate(G):
+                cells = gateCells[gi]
+                if cells.numel() == 0: continue
+                zr = interp(zrG[:, gi], t); hc = hh[:, cells]; zc = z.flatten()[cells][None, :]
+                w = torch.where(hc > 0.01, hc, torch.zeros_like(hc)); ws = w.sum(1)
+                eta = torch.where(ws > 0, ((zc + hc) * w).sum(1) / torch.clamp(ws, min=1e-9), torch.full_like(ws, -99.0))
+                psc = psiA.flatten()[cells]; vol = (hc * psc[None, :]).sum(1); cap = float(psc.sum())
+                Q = torch.zeros(B, device=dev, dtype=f32)
+                if allow_open: Q = Q + openG[:, gi].to(f32) * weir(C_w, gt["width"] * openPct / 100, zr, eta, gt["sill"])
+                Q = Q + (zr > gt["levee"]).to(f32) * weir(1.7, 150.0, zr, eta, gt["levee"])
+                Q = torch.where(Q < 0, -torch.minimum(-Q, vol * 0.5 / dt), Q)
+                qAcc[:, gi] += (Q * dt).to(qAcc.dtype)
+                hh[:, cells] = torch.clamp(hc + (Q * dt / cap)[:, None], min=0)
+        h = hh.reshape(B, ny, nx)
         t += dt; step += 1
-    out["hmax"] = hmaxEnv.cpu().numpy(); out["steps"] = step; out["seconds"] = time.time() - t0
+    out["hmax"] = hmaxEnv.cpu().numpy(); out["steps"] = step; out["seconds"] = time.time() - t0; out["inflow_m3"] = qAcc.cpu().numpy()
     return out
 
 def cm_u8(a): return base64.b64encode(np.minimum(255, np.round(a * 100)).astype(np.uint8).tobytes()).decode()
@@ -139,6 +176,45 @@ def validate(rid, device):
         print(f"  {th}h  torch area {r['area'][k][0]:.2f} deep {r['deep'][k][0]:.2f} maxD {r['maxD'][k][0]:.3f} | js area {js[th]['area_ha']} deep {js[th]['deep_ha']} maxD {js[th]['maxD']}")
     both = ((h4 >= 0.1) & (jsh >= 0.1) & mask).sum(); either = (((h4 >= 0.1) | (jsh >= 0.1)) & mask).sum()
     print(f"  4h volume torch {vol:.0f} m3 vs js {inp['js_vol_4h_m3']} ; cell IoU(>=0.1 m) {both / max(1, either):.3f} ; max |dh| {np.abs(h4 - jsh)[mask].max():.3f} m ; steps {r['steps']} in {r['seconds']:.0f}s")
+
+def river_scen(inp, Q, tide, open_idx, rain=RIVER_RAIN, hours=2):
+    """洩洪情境：河道水位取自頁面算好的水位表（洪水規模 × 潮位），指定哪些水門未關。"""
+    rv = inp["river"]; Z = rv["stages"]["Z"][f"{Q:g}|{tide:g}"]; nF = len(Z)  # JS 的數字鍵：2.0 → "2"
+    zr = [[Z[k][node] for k in range(nF)] for node in rv["gateNodes"]]
+    return dict(rain=rain, hours=hours, sewerMM=78.8, pumpMM=60, avail=100, open=[gi in open_idx for gi in range(len(zr))], zr=zr, zrOut=[Z[k][rv["keyNode"]] for k in range(nF)])
+
+def validate_river(rid, device):
+    inp = load(rid); rv = inp["river"]; p = rv["P"]
+    sc = [dict(rain=p["rain"], hours=p["rainHours"], sewerMM=p["sewerMM"], pumpMM=p["pumpMM"], avail=p["avail"], open=[g["open"] for g in rv["gates"]], zr=[g["zr"] for g in rv["gates"]], zrOut=rv["zrOut"])]
+    print(rid, rv["preset"], "open", [n for n, g in zip(rv["gateNames"], rv["gates"]) if g["open"]]); r = simulate(inp, sc, device)
+    js = {s["t_h"]: s for s in rv["js_stats"]}
+    for k, th in ((24, 2), (48, 4), (96, 8)):
+        print(f"  {th}h  torch area {r['area'][k][0]:.2f} deep {r['deep'][k][0]:.2f} maxD {r['maxD'][k][0]:.3f} | js area {js[th]['area_ha']} deep {js[th]['deep_ha']} maxD {js[th]['maxD']}")
+    print("  gate inflow m3 (torch)", [round(float(v)) for v in r["inflow_m3"][0]], "| js 4h instantaneous q m3/s", js[4]["q"], "steps", r["steps"], f"{r['seconds']:.0f}s")
+
+def river(rid, device, outdir):
+    inp = load(rid); rv = inp["river"]; Qs, tides = rv["stages"]["Qpeaks"], rv["stages"]["tides"]; nG = len(rv["gateNames"])
+    sets = [("none", [])] + [(f"g{gi}", [gi]) for gi in range(nG)] + [("all", list(range(nG)))]
+    scen, meta = [], []
+    for Q in Qs:
+        for td in tides:
+            for name, idx in sets: scen.append(river_scen(inp, Q, td, idx)); meta.append(dict(Qpeak=Q, tide=td, gates=name))
+    print(rid, len(scen), "river scenarios on", device, flush=True); r = simulate(inp, scen, device)
+    area = np.array(r["area"]); deep = np.array(r["deep"]); maxD = np.array(r["maxD"])
+    res = {"region": rid, "qUnit": rv["qUnit"], "Qpeaks": Qs, "tides": tides, "gateNames": rv["gateNames"], "keyGate": rv["keyGate"], "rain": RIVER_RAIN,
+           "steps": r["steps"], "seconds": round(r["seconds"]), "device": device, "scenarios": []}
+    for b, m in enumerate(meta):
+        res["scenarios"].append({**m, "area_4h": round(float(area[48, b]), 2), "deep_4h": round(float(deep[48, b]), 2), "maxD_4h": round(float(maxD[48, b]), 3),
+                                 "area_peak": round(float(area[:, b].max()), 2), "deep_peak": round(float(deep[:, b].max()), 2), "t_peak_h": round(float(area[:, b].argmax()) * inp["frameSec"] / 3600, 2),
+                                 "area_8h": round(float(area[96, b]), 2), "inflow_m3": [round(float(v)) for v in r["inflow_m3"][b]]})
+    mask = b64arr(inp["mask_u8"], np.uint8).reshape(inp["ny"], inp["nx"]) == 1
+    idx = {(m["Qpeak"], m["tide"], m["gates"]): b for b, m in enumerate(meta)}
+    Qmid = Qs[2]; maps = {"Qpeak": Qmid, "tide": 1.6, "hmax_cm": {name: cm_u8(r["hmax"][idx[(Qmid, 1.6, name)]] * mask) for name, _ in sets}}
+    maps["hmax_cm_none_max"] = cm_u8(r["hmax"][idx[(Qs[-1], 2.0, "none")]] * mask)  # 最大洪水＋暴潮、水門全關：只有越堤
+    outdir = pathlib.Path(outdir); outdir.mkdir(parents=True, exist_ok=True)
+    (outdir / f"{rid}_river.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")))
+    (outdir / f"{rid}_river_maps.json").write_text(json.dumps(maps, separators=(",", ":")))
+    kg = f"g{rv['keyGate']}"; print(rid, "done", r["steps"], "steps", round(r["seconds"]), "s; key gate open @", Qmid, "tide 1.6: 4h", res["scenarios"][idx[(Qmid, 1.6, kg)]]["area_4h"], "ha peak", res["scenarios"][idx[(Qmid, 1.6, kg)]]["area_peak"], flush=True)
 
 def sweep(rid, device, outdir):
     inp = load(rid); scen, meta = [], []
@@ -174,4 +250,4 @@ if __name__ == "__main__":
     cmd, rid = sys.argv[1], sys.argv[2]
     device = "cuda" if "--device" in sys.argv and sys.argv[sys.argv.index("--device") + 1] == "cuda" else ("cuda" if torch.cuda.is_available() else "cpu")
     out = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else str(ROOT / "work/sweep")
-    validate(rid, device) if cmd == "validate" else sweep(rid, device, out)
+    {"validate": lambda: validate(rid, device), "validate-river": lambda: validate_river(rid, device), "river": lambda: river(rid, device, out)}.get(cmd, lambda: sweep(rid, device, out))()
