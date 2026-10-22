@@ -24,6 +24,8 @@ python3 scripts/mosaic.py                 # 全市 20 m DEM（需 data/raw/taipe
 python3 scripts/build_region.py <id>      # 依 regions/<id>.json 產生 data/processed/<id>/（會從 OSM API 下載資料）
 python3 scripts/fetch_streams.py [id …]   # 山區明渠溪流（OSM Overpass）→ work/streams/
 python3 scripts/build_streams.py [id …]   # 溪流畫進 20 m 網格 → data/processed/<id>/streams.json
+python3 scripts/fetch_codis.py <站號> <cwb|auto_C0|auto_C1> 2001-09-15 2001-09-18   # 氣象署 CODiS 逐時雨量 → work/nari/
+python3 scripts/nari.py                   # 2001 納莉颱風歷史情境 → data/processed/<id>/nari.json
 python3 src/make_region_template.py       # 新店溪模板 → 通用河段模板
 python3 src/build.py                      # 新店溪 → index.html
 python3 src/build.py --region <id>        # 河段 → <id>/index.html
@@ -68,6 +70,7 @@ python3 scripts/sweep_table.py                           # 結果表（docs/STAG
 - 疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足
 - GPU 情境集合（`scripts/flow_torch.py`，二維水流的 PyTorch 移植，在 Colab 批次計算）：128 個降雨強度×延時×排水情境，以及洪水規模×潮位×水門失效組合；每頁有強度–面積與洪水規模–面積曲線、淹水門檻圖（多大的雨會淹到這裡）、淹水機率、最大水深包絡與各水門失效包絡圖層
 - 可疊上臺北市水利處「降雨積水模擬圖」（112 年版，78.8／100／130 mm/h）對照；`scripts/compare_inundation.py` 計算面積、命中率與 IoU
+- 歷史情境「2001 年納莉颱風」：氣象署測站實測逐時雨量、觀測峰值水位、紀錄中的抽水站失效，跑完與水利署報告的淹水地點逐處比對
 - 颱風預報換算（合理化公式估算新店溪洪峰，只有新店溪頁面）
 - 疏散門缺少 OSM 資料的河段，依道路穿越堤線處推定位置（頁面上註明）
 
@@ -84,6 +87,7 @@ repo 內已含重跑所需的原始資料：內政部 20 m DEM（zip）、抽水
 - 抽水站：臺北市水利處抽水站（data.gov.tw 資料集 143901）
 - 疏散門：臺北市水利處「臺北市疏散門資訊」（data.taipei，政府資料開放授權條款第 1 版）
 - 降雨積水模擬圖：臺北市政府工務局水利工程處「臺北市降雨積水模擬圖（112 年更新版）」（data.gov.tw 資料集 121550，政府資料開放授權條款第 1 版）
+- 納莉颱風：中央氣象署 CODiS 測站逐時雨量；臺北市水利處〈納莉颱風〉；經濟部水利署〈90 年納莉颱風〉事件報告
 - 道路、橋樑、設施、疏散門：© OpenStreetMap contributors，ODbL
 - 3D 繪圖：three.js（MIT）
 

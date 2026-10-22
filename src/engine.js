@@ -1,5 +1,5 @@
 // ---- 共用計算核心：河道水位、水門堰流、堤內窪地、排水系統（各區域資料見 *_data.js）----
-const SIM_HOURS = 8, DT = 30, FRAME_EVERY = 10; // 每 5 分鐘存一格
+let SIM_HOURS = 8; const DT = 30, FRAME_EVERY = 10; // 每 5 分鐘存一格；模擬時長可由情境設定（P.simHours，歷史情境 16 小時）
 const SEWER_DESIGN = 78.8; // mm/hr，台北市雨水下水道設計標準（5 年重現期暴雨）
 const GRAVITY_EL = 2.5;    // 外水位低於此值時，下水道可經重力閘門自然排出（假設的出口高程）
 const SEWER_STORE_MM = 20; // 管網可暫存的水量，以集水區平均水深表示（假設值）
@@ -65,18 +65,22 @@ function getBasins() {
   return BASINS;
 }
 
+// 歷史情境：逐時雨量（mm/h，第 k 小時＝[k, k+1)）、河川歷線（單峰：qBase→1→退水，峰值在 tp）
+function seriesRain(p, t) { const k = Math.min(p.rainSeries.length - 1, Math.max(0, Math.floor(t))); return p.rainSeries[k]; }
+function seriesQ(p, t) { const b = p.qBase ?? 0.35, w = t < p.tp ? 3.5 : 5; return b + (1 - b) * Math.exp(-Math.pow((t - p.tp) / w, 2)); }
 function simulate(p) {
+  SIM_HOURS = p.simHours || 8;
   // p: { Qpeak, tide, tideSync, rain, sewerMM, pumpMM, avail, C, openPct, closeAt, gateOpen:{id:bool} }
   const B = getBasins(), ids = Object.keys(B);
   const vol = {}, sew = {}; ids.forEach(id => { vol[id] = 0; sew[id] = 0; });
   const frames = [];
-  const tp = p.tideSync ? 3 : 3 + 6.21;
+  const tp = p.tideT !== undefined ? p.tideT : p.tideSync ? 3 : 3 + 6.21;
   const steps = SIM_HOURS * 3600 / DT;
   for (let s = 0; s <= steps; s++) {
     const t = s * DT / 3600;
-    const Qk = p.Qpeak / 1000 * hydroShape(t);
+    const Qk = p.Qpeak / 1000 * (p.tp !== undefined ? seriesQ(p, t) : hydroShape(t));
     const tide = p.tide * Math.cos(2 * Math.PI * (t - tp) / 12.42);
-    const rainNow = p.rain * rainShape(t, p.rainHours);
+    const rainNow = p.rainSeries ? seriesRain(p, t) : p.rain * rainShape(t, p.rainHours);
     const Z = NODES.map(n => riverStage(n, Qk, tide));
     const zin = {}, net = {};
     ids.forEach(id => { const b = B[id]; zin[id] = vol[id] > 0 ? levelFromVolume(b.tab, vol[id]) : b.zb; net[id] = 0; });

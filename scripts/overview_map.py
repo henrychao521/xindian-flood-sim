@@ -105,6 +105,10 @@ for r in regs:
     if rv:
         q5 = rv["overtop_label"].split("＋")[0]
         foot.append(f'洪峰 {q5}＋暴潮、水門全關：' + (f'越堤淹 <b class="num">{fmt_ha(rv["overtop"])}</b> ha' if rv["overtop"] >= 1 else '河水仍低於堤頂，不越堤'))
+    nf = ROOT / f"data/processed/{rid}/nari_results.json"
+    if nf.exists():
+        nr = json.loads(nf.read_text(encoding="utf-8")); good = sum(x["verdict"] == "量級相符" for x in nr["records"]); tot = sum(x["verdict"] != "範圍內沒有這些路名" for x in nr["records"])
+        foot.append(f'納莉颱風重建（實測雨量）：最大淹水 <b class="num">{nr["maxArea"]}</b> ha' + (f'，紀錄 {tot} 處中 <b class="num">{good}</b> 處量級相符' if tot else ''))
     if cmp100: foot.append(f'水利處 100 mm/h 積水圖 <b class="num">{cmp100["official_ha"]:.0f}</b> ha，本模型同情境 <b class="num">{cmp100["model_ha"]:.0f}</b> ha、位置命中 <b class="num">{(cmp100["hit_rate"] or 0) * 100:.0f}%</b>')
     img = f"img/{rid}.jpg"
     cards.append(f'''      <a class="card" href="{r["href"]}">

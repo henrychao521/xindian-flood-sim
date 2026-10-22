@@ -377,6 +377,20 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <div class="hint">每條線是一座水門未關（或全關、全部未關）時，洪水規模從小到大的尖峰淹水面積；河道水位用頁面同一套水位模型（洪峰時段 T+2–4 h 與潮位同步），背景雨 40 mm/h × 2 h，排水設計值。虛線「全關」只剩越堤。地圖可疊「水門失效包絡」看每座水門失效時水往哪裡去。</div>
         </div>
       </section>
+      <section class="panel" id="nariPanel" hidden>
+        <div class="chart-head"><h2>納莉颱風紀錄對照（2001/9/16–17）</h2><span class="hint">16 小時內的最大水深</span></div>
+        <svg id="nariRain" role="img" aria-label="納莉颱風逐時雨量"></svg>
+        <div class="info-line" id="nariMeta"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>紀錄地點（水利署報告表 5）</th><th class="r">紀錄水深</th><th class="r">模型最大水深 中位數／90%</th><th class="r">≥ 0.3 m 路段／路段總長</th><th>比對</th></tr></thead>
+            <tbody id="nariBody"></tbody>
+          </table>
+        </div>
+        <div class="hint" id="nariNotes"></div>
+        <div class="hint">比對方式：找範圍內名稱以紀錄路名開頭的道路，取每段道路所在 20 m 格在 16 小時內的最大水深。紀錄是「該區域的積水深度」，道路只是代表位置；20 m 網格與集總式下水道抓不到街道尺度的差異，請看量級與有沒有淹，不要看到公分。</div>
+      </section>
+
       <section class="panel" id="sec-bld">
         <div class="chart-head">
           <h2>建物受災統計（萬華、中正、大安堤內）</h2>
@@ -476,6 +490,7 @@ const PRESETS = [
   { id: "pumpfail", name: "抽水站故障：可用率 30%＋時雨量 70 mm（1 小時）", p: { Qpeak: 6000, tide: 1.5, tideSync: true, rain: 70, ...DRAIN0, rainHours: 1, avail: 30, C: 1.55, openPct: 100, closeAt: 8, gateOpen: {} } },
   { id: "extreme", name: "接近 200 年洪峰", p: { Qpeak: 11500, tide: 2.0, tideSync: true, rain: 80, ...DRAIN0, C: 1.55, openPct: 100, closeAt: 8, gateOpen: {} } }
 ];
+if (typeof NARI_DATA !== "undefined" && NARI_DATA) PRESETS.push(nariPreset(PRESETS[0].p));
 let P = JSON.parse(JSON.stringify(PRESETS[0].p));
 let activePreset = "pdf";
 let frames = [];
@@ -486,7 +501,13 @@ let timer = null;
 const $ = id => document.getElementById(id);
 const fmt = (v, d = 2) => Number(v).toFixed(d);
 const fmtInt = v => Math.round(v).toLocaleString("zh-TW");
-const hhmm = t => { const m = Math.round(t * 60); return `T+${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
+// 時刻顯示：歷史情境用真實日期時間（P.t0），其他情境用 T+h:mm
+const hhmm = t => {
+  const m = Math.round(t * 60);
+  if (P && P.t0) { const d = new Date(new Date(P.t0 + ":00+08:00").getTime() + m * 60000 + 8 * 3600000); return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`; }
+  return `T+${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+};
+const hTick = v => P && P.t0 ? hhmm(v).split(" ")[1] : v + "h";
 const NS = "http://www.w3.org/2000/svg";
 function el(tag, attrs = {}, parent) {
   const e = document.createElementNS(NS, tag);
@@ -523,7 +544,7 @@ function toggleGate(i) {
   syncControls(); recompute();
 }
 function bindRange(id, key, scale = 1) {
-  $(id).addEventListener("input", e => { P[key] = Number(e.target.value) * scale; activePreset = null; syncControls(); recompute(); });
+  $(id).addEventListener("input", e => { P[key] = Number(e.target.value) * scale; if (key === "rain" || key === "rainHours") delete P.rainSeries; activePreset = null; syncControls(); recompute(); });
 }
 function syncControls() {
   $("q").value = P.Qpeak; $("qOut").textContent = fmtInt(P.Qpeak) + " m³/s";
@@ -537,7 +558,7 @@ function syncControls() {
   $("avail").value = P.avail; $("availOut").textContent = P.avail + "%";
   $("streamOn").checked = P.streams !== false;
   $("open").value = P.openPct; $("openOut").textContent = P.openPct + "%";
-  $("close").value = P.closeAt; $("closeOut").textContent = P.closeAt >= 8 ? "未封堵" : hhmm(P.closeAt);
+  $("close").value = P.closeAt; $("closeOut").textContent = P.closeAt >= (P.simHours || 8) ? "未封堵" : hhmm(P.closeAt);
   const pdfC = P.C >= 5; $("cPdf").checked = pdfC; $("cc").disabled = pdfC; if (!pdfC) $("cc").value = P.C; $("ccOut").textContent = pdfC ? "≈ 17（PDF）" : fmt(P.C, 2);
   GATES.forEach(g => {
     const failed = !!P.gateOpen[g.id];
@@ -551,6 +572,8 @@ function syncControls() {
 // ---------------- 計算 ----------------
 function recompute() {
   frames = simulate(P);
+  $("time").max = frames.length - 1; $("close").max = SIM_HOURS; if (tIdx > frames.length - 1) tIdx = frames.length - 1;
+  if (typeof renderNari === "function") renderNari();
   resetParticles();
   render();
   if (typeof renderSweepPanel === "function") renderSweepPanel();
@@ -640,7 +663,7 @@ function renderStageTS() {
   const [y0, y1] = niceRange(Math.min(...all) - 0.3, Math.max(...all) + 0.3, 1);
   const X = t => box.l + (t / SIM_HOURS) * (box.r - box.l);
   const Y = v => box.b - (v - y0) / (y1 - y0) * (box.b - box.t);
-  axes(svg, X, Y, ticks(0, 8, 2), ticks(y0, y1, y1 - y0 > 8 ? 2 : 1), box, v => v + "h", v => v);
+  axes(svg, X, Y, ticks(0, SIM_HOURS, SIM_HOURS > 8 ? 4 : 2), ticks(y0, y1, y1 - y0 > 8 ? 2 : 1), box, hTick, v => v);
   el("line", { x1: box.l, x2: box.r, y1: Y(g.sill), y2: Y(g.sill), stroke: "var(--danger)", "stroke-dasharray": "5 4", "stroke-width": 1.5 }, svg);
   txt(svg, box.r - 2, Y(g.sill) - 5, `底檻 ${g.sill}`, { "text-anchor": "end" });
   const lev = NODES[g.node].levee;
@@ -670,7 +693,7 @@ function renderFlowTS() {
   const top = Math.ceil(mx / step) * step;
   const X = t => box.l + (t / SIM_HOURS) * (box.r - box.l);
   const Y = v => box.b - v / top * (box.b - box.t);
-  axes(svg, X, Y, ticks(0, 8, 2), ticks(0, top, step), box, v => v + "h", v => v);
+  axes(svg, X, Y, ticks(0, SIM_HOURS, SIM_HOURS > 8 ? 4 : 2), ticks(0, top, step), box, hTick, v => v);
   txt(svg, box.l + 4, box.t + 10, "m³/s", {});
   el("polygon", { points: `${X(0)},${Y(0)} ` + frames.map((f, i) => `${X(f.t)},${Y(qin[i])}`).join(" ") + ` ${X(SIM_HOURS)},${Y(0)}`, fill: "var(--danger)", "fill-opacity": .18, stroke: "var(--danger)", "stroke-width": 2 }, svg);
   el("polyline", { points: frames.map((f, i) => `${X(f.t)},${Y(qr[i])}`).join(" "), fill: "none", stroke: "var(--warn)", "stroke-width": 2 }, svg);
@@ -789,6 +812,7 @@ function render() {
 //@@TERRAIN@@
 //@@FLOW@@
 //@@SWEEP@@
+//@@NARI@@
 
 // ---------------- 播放 ----------------
 let tPos = null; // 播放中的連續時間（以 5 分鐘為 1 格），供 3D 內插

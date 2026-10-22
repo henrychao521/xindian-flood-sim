@@ -87,7 +87,8 @@ function flowWorkerMain() {
         dem.fill(0);
         for (let k = 0; k < N; k++) { const c = P.catch[k]; if (c >= 0 && h[k] > 0) dem[c] += Math.min(h[k] * psi[k] * A, intake); }
         for (let c = 0; c < nC; c++) {
-          const drain = (P.pumpMM / 1000 / 3600 * cArea[c] * P.avail / 100 + (gravity ? P.sewerMM / 1000 / 3600 * cArea[c] : 0)) * dt;
+          const pumpOn = !P.failAt || t < P.failAt[c] * 3600;  // 歷史情境：抽水站淹水失效後不再抽水
+          const drain = (P.pumpMM / 1000 / 3600 * cArea[c] * (pumpOn ? P.avail : 0) / 100 + (gravity ? P.sewerMM / 1000 / 3600 * cArea[c] : 0)) * dt;
           const allow = drain + (cStore[c] - sew[c]);
           fac[c] = dem[c] > 0 ? Math.min(1, Math.max(0, allow) / dem[c]) : 0;
           sew[c] += dem[c] * fac[c]; const o = Math.min(drain, sew[c]); sew[c] -= o;
@@ -134,13 +135,14 @@ function runFlow() {
     if (token !== FLOW.token) return;
     if (e.data.type === "progress") { FLOW.progress = e.data.p; updateFlowStatus(); return; }
     FLOW.result = e.data.out; FLOW.worker = null; worker.terminate();
-    render();
+    render(); if (typeof renderNari === "function") renderNari();
   };
   worker.postMessage({
     nx: DEM.nx, ny: DEM.ny, d: DEM.d, z: DEM.z, mask: DEM.mask, psi: DEM.psi, n: 0.035,
     simHours: SIM_HOURS, frameSec: FRAME_EVERY * DT, sewer: SEWER_DESIGN,
     rain: frames.map(f => f.rain), C: P.C, openPct: P.openPct, closeAt: P.closeAt,
     sewerMM: P.sewerMM, pumpMM: P.pumpMM, avail: P.avail, storeMM: SEWER_STORE_MM, gravityEL: GRAVITY_EL,
+    failAt: P.pumpFail ? DRAIN.stations.map(st => { const f = P.pumpFail.find(x => x.name === st.n || st.n.startsWith(x.name.replace("抽水站", ""))); return f ? f.at : 1e9; }) : null,
     zrOut: frames.map(f => f.Z[GATES[REGION.keyGate].node]), catch: DRAIN.catch, nCatch: DRAIN.stations.length,
     stream: STREAMS.cells, streamOn: P.streams !== false,
     gates: gateIds.map((id, gi) => {

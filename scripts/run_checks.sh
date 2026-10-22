@@ -20,6 +20,9 @@ for r in $REGIONS; do
     (cd "$TMP" && PRESETS=keyopen,rain,shortrain node "$ROOT/tests/region_check.js" "$TMP/t_$r.html" "$TMP/t_$r")
   fi
   mkdir -p "$ROOT/data/processed/$r"; cp "$TMP/t_${r}_stats.json" "$ROOT/data/processed/$r/results.json"
+  if [ -f "$ROOT/data/processed/$r/nari.json" ]; then  # 納莉颱風歷史情境（scripts/nari.py）
+    (cd "$TMP" && node "$ROOT/tests/nari_check.js" "$TMP/t_$r.html" "$TMP/t_$r") && cp "$TMP/t_${r}_nari.json" "$ROOT/data/processed/$r/nari_results.json"
+  fi
 done
 python3 "$ROOT/scripts/overview_map.py"
 for r in $REGIONS; do  # 與水利處降雨積水模擬圖比對（最後一個情境＝短延時 100 mm/h）
