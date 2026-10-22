@@ -86,33 +86,57 @@ def esc(t): return str(t).replace("&", "&amp;").replace("<", "&lt;")
 boxes = "\n".join(
     f'      <a class="box" href="{r["href"]}" style="left:{r["box"][0]}%;top:{r["box"][1]}%;width:{r["box"][2]}%;height:{r["box"][3]}%" '
     f'aria-label="{esc(r["title"])}"><span>{esc(r["title"].split("（")[0])}</span></a>' for r in regs)
-cards = []
+cards, chart_rows = [], []
+SHORT = {"xindian": "新店溪", "tamsui": "淡水河東岸", "shilin": "基隆河下游", "zhongshan": "基隆河中游", "neihu": "基隆河上游", "jingmei": "景美溪", "beitou": "基隆河出海段"}
+def fmt_ha(v): return "—" if v is None else f"{v:,.0f}"
 for r in regs:
-    res = r.get("results")
+    rid = r["id"]; rv = r.get("riversweep"); sw = r.get("sweep"); cmp100 = r.get("compare", {}).get("100")
     gate_word = "假想缺口" if r.get("auto_gates") else "疏散門"
-    stats = (f'<dl><div><dt>堤內面積</dt><dd class="num">{r["inland_km2"]} km²</dd></div><div><dt>{gate_word}</dt><dd class="num">{r["gates"]}</dd></div>'
-             f'<div><dt>抽水站</dt><dd class="num">{r["pumps"]}</dd></div></dl>'
-             + (f'<dl class="res"><div><dt>{esc(res.get("keyopen_label", res["keyGate"] + "未關（計畫洪峰 80%，4 h）"))}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
-                f'<div><dt>時雨量 110 mm・1 小時（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
-             + (f'<dl class="res"><div><dt>短延時 100 mm/h：本模型／水利處圖</dt><dd class="num">{r["compare"]["100"]["model_ha"]:.0f}／{r["compare"]["100"]["official_ha"]:.0f} ha</dd><dt>・命中</dt><dd class="num">{(r["compare"]["100"]["hit_rate"] or 0) * 100:.0f}%</dd></div></dl>' if r.get("compare", {}).get("100") else "")
-             ) if "inland_km2" in r else \
-            ('<dl><div><dt>特色</dt><dd>本專案起點：颱風預報換算、五座疏散門、示範影片</dd></div></dl>'
-             + (f'<dl class="res"><div><dt>{esc(res["keyopen_label"])}</dt><dd class="num">{res["keyopen_ha"]:.0f} ha</dd></div>'
-                f'<div><dt>時雨量 110 mm・1 小時（4 h）</dt><dd class="num">{res["rain_ha"]:.0f} ha</dd><dt>・水深 ≥ 0.5 m</dt><dd class="num">{res["rain_deep_ha"]:.0f} ha</dd></div></dl>' if res else "")
-             + (f'<dl class="res"><div><dt>短延時 100 mm/h：本模型／水利處圖</dt><dd class="num">{r["compare"]["100"]["model_ha"]:.0f}／{r["compare"]["100"]["official_ha"]:.0f} ha</dd><dt>・命中</dt><dd class="num">{(r["compare"]["100"]["hit_rate"] or 0) * 100:.0f}%</dd></div></dl>' if r.get("compare", {}).get("100") else ""))
-    if r.get("sweep"):
-        sw = r["sweep"]
-        stats += (f'<dl class="res"><div><dt>GPU 情境集合尖峰（1 h）78.8／100／130 mm/h</dt><dd class="num">{sw["peak"]["78.8"]:.0f}／{sw["peak"]["100"]:.0f}／{sw["peak"]["130"]:.0f} ha</dd></div>'
-                  + (f'<div><dt>抽水可用率 30%・100 mm/h</dt><dd class="num">{sw["pump30_100"]:.0f} ha</dd></div>' if sw["pump30_100"] is not None else "") + '</dl>')
-    if r.get("riversweep"):
-        rv = r["riversweep"]
-        stats += (f'<dl class="res"><div><dt>水門失效集合・{esc(rv["key"])}未關 {rv["qlabel"]}（潮位 1.6 m）尖峰</dt><dd class="num">{rv["peaks"][0]:.0f}／{rv["peaks"][1]:.0f}／{rv["peaks"][2]:.0f} ha</dd></div>'
-                  f'<div><dt>{rv["overtop_label"]}（只越堤）</dt><dd class="num">{rv["overtop"]:.0f} ha</dd></div></dl>')
+    facts = (f'<span>堤內 <b class="num">{r["inland_km2"]}</b> km²</span><span>{gate_word} <b class="num">{r["gates"]}</b></span><span>抽水站 <b class="num">{r["pumps"]}</b></span>'
+             if "inland_km2" in r else '<span>本專案起點：颱風預報換算、五座疏散門、示範影片</span>')
+    q_mid = rv["qlabel"].split("／")[1] if rv else ""
+    if rv and "m³/s" in rv["qlabel"] and not q_mid.endswith("m³/s"): q_mid += " m³/s"
+    tiles = []
+    if rv: tiles.append(("gate", f'{esc(rv["key"])}未關', f'洪峰 {q_mid}・潮位 1.6 m', rv["peaks"][1]))
+    if sw: tiles.append(("rain", "時雨量 130 mm", "1 小時・排水設計值", sw["peak"]["130"]))
+    if sw and sw.get("pump30_100") is not None: tiles.append(("pump", "抽水站只剩 30%", "時雨量 100 mm・1 小時", sw["pump30_100"]))
+    tile_html = "".join(f'<div class="tile tile-{k}"><span class="t-label">{a}</span><span class="t-value num">{fmt_ha(v)}<small>ha</small></span><span class="t-sub">{b}</span></div>' for k, a, b, v in tiles)
+    foot = []
+    if rv:
+        q5 = rv["overtop_label"].split("＋")[0]
+        foot.append(f'洪峰 {q5}＋暴潮、水門全關：' + (f'越堤淹 <b class="num">{fmt_ha(rv["overtop"])}</b> ha' if rv["overtop"] >= 1 else '河水仍低於堤頂，不越堤'))
+    if cmp100: foot.append(f'水利處 100 mm/h 積水圖 <b class="num">{cmp100["official_ha"]:.0f}</b> ha，本模型同情境 <b class="num">{cmp100["model_ha"]:.0f}</b> ha、位置命中 <b class="num">{(cmp100["hit_rate"] or 0) * 100:.0f}%</b>')
+    img = f"img/{rid}.jpg"
     cards.append(f'''      <a class="card" href="{r["href"]}">
-        <h2>{esc(r["title"])}</h2>
-        <p>{esc(r.get("districts", "萬華、中正、大安"))}・{esc(r["river"])}</p>
-        {stats}
+        <div class="thumb"><img src="{img}" width="1200" height="675" loading="lazy" alt="{esc(r["title"])}的 3D 地形與建物（Blender 算圖）"></div>
+        <div class="body">
+          <h3>{esc(r["title"])}</h3>
+          <p class="sub">{esc(r.get("districts", "萬華、中正、大安"))}・{esc(r["river"])}</p>
+          <p class="facts">{facts}</p>
+          <div class="tiles">{tile_html}</div>
+          {"<ul class='foot'>" + "".join(f"<li>{x}</li>" for x in foot) + "</ul>" if foot else ""}
+        </div>
       </a>''')
+    if rv and sw: chart_rows.append((SHORT.get(rid, rid), r["href"], rv["peaks"][1], sw["peak"]["130"], rv["key"], q_mid))
+# ---- 比較圖：各河段「關鍵水門未關」與「時雨量 130 mm」的尖峰淹水面積（同一個公頃軸、橫向分組長條；HTML 畫，手機上字不會縮小）----
+def chart_html(rows):
+    vmax = max([max(a, b) for _, _, a, b, *_ in rows] + [1]); step = 200 if vmax > 800 else 100 if vmax > 300 else 50
+    vmax = (int(vmax / step) + 1) * step
+    pct = lambda v: f"{v / vmax * 100:.2f}%"
+    ticks = "".join(f'<span style="left:{pct(v)}">{v:,}</span>' for v in range(0, vmax + 1, step))
+    grid = "".join(f'<i style="left:{pct(v)}"></i>' for v in range(0, vmax + 1, step))
+    out = ['<div class="bars" role="table" aria-label="各河段尖峰淹水面積（公頃）">']
+    for name, href, a, b, key, q in rows:
+        bar = lambda val, cls, lab: f'<div class="bar {cls}" role="cell" tabindex="0" data-tip="{esc(name)}｜{esc(lab)}：{val:,.0f} ha" aria-label="{esc(lab)} {val:,.0f} 公頃"><span class="fill" style="width:{pct(val)}"></span><span class="v num">{val:,.0f}</span></div>'
+        out.append(f'<div class="brow" role="row"><a class="bname" role="rowheader" href="{href}">{esc(name)}</a><div class="btrack">{grid}{bar(a, "s1", f"{key}未關・洪峰 {q}")}{bar(b, "s2", "時雨量 130 mm・1 小時")}</div></div>')
+    out.append(f'<div class="brow axis" aria-hidden="true"><span class="bname"></span><div class="btrack ticks">{ticks}</div></div></div>')
+    return "".join(out)
+chart = chart_html(chart_rows) if chart_rows else ""
+# 圖說由資料產生：哪些河段水門失效比大雨淹得多、哪些水門未關也不進水
+gate_more = [n for n, _, a, b, *_ in chart_rows if a > b]; gate_zero = [n for n, _, a, *_ in chart_rows if a < 1]
+chart_note = ("、".join(gate_more) + ("是唯一" if len(gate_more) == 1 else "是") + "水門失效比 130 mm/h 暴雨淹得多的河段" if gate_more else "各河段都是 130 mm/h 暴雨淹得比水門失效多") + "；" \
+             + ("、".join(gate_zero) + "的水門底檻高於這個洪水位，水門未關也不進水，主要風險是大雨；" if gate_zero else "") \
+             + "130 mm/h 的面積模型普遍高估，絕對值請看下方說明。"
 html = f'''<!doctype html>
 <html lang="zh-Hant-TW">
 <head>
@@ -126,42 +150,89 @@ html = f'''<!doctype html>
 <style>
 :root {{
   --bg: #eef3f6; --surface: #ffffff; --ink: #12212b; --muted: #566875; --line: #d3dde4;
-  --accent: #0e6a86; --accent-soft: #dcecf2;
+  --accent: #0e6a86; --accent-soft: #dcecf2; --s1: #2a78d6; --s2: #eb6834; --s3: #6b7a86;
   --font-display: "Noto Serif TC", "Songti TC", serif;
   --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
   --font-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   color-scheme: light;
 }}
 @media (prefers-color-scheme: dark) {{
-  :root:not([data-theme="light"]) {{ --bg: #0c151c; --surface: #13202a; --ink: #e2ebf1; --muted: #8fa2b0; --line: #243540; --accent: #45b8d6; --accent-soft: #173444; color-scheme: dark; }}
+  :root:not([data-theme="light"]) {{ --bg: #0c151c; --surface: #13202a; --ink: #e2ebf1; --muted: #8fa2b0; --line: #243540; --accent: #45b8d6; --accent-soft: #173444; --s1: #3987e5; --s2: #d95926; --s3: #8fa2b0; color-scheme: dark; }}
 }}
-:root[data-theme="dark"] {{ --bg: #0c151c; --surface: #13202a; --ink: #e2ebf1; --muted: #8fa2b0; --line: #243540; --accent: #45b8d6; --accent-soft: #173444; color-scheme: dark; }}
+:root[data-theme="dark"] {{ --bg: #0c151c; --surface: #13202a; --ink: #e2ebf1; --muted: #8fa2b0; --line: #243540; --accent: #45b8d6; --accent-soft: #173444; --s1: #3987e5; --s2: #d95926; --s3: #8fa2b0; color-scheme: dark; }}
 * {{ box-sizing: border-box; }}
 html, body {{ margin: 0; }}
 body {{ background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.55; }}
-main {{ max-width: 1180px; margin: 0 auto; padding: 28px 16px 48px; display: grid; gap: 20px; }}
-h1 {{ font-family: var(--font-display); font-size: clamp(24px, 3.4vw, 34px); margin: 0; line-height: 1.25; }}
-.lede {{ margin: 6px 0 0; color: var(--muted); max-width: 70ch; }}
-.layout {{ display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }}
-@media (max-width: 860px) {{ .layout {{ grid-template-columns: 1fr; }} }}
-.map {{ position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }}
+main {{ max-width: 1240px; margin: 0 auto; padding: 32px 16px 56px; display: grid; gap: 28px; }}
+.eyebrow {{ font-size: 12px; letter-spacing: .1em; color: var(--accent); font-weight: 700; margin: 0 0 6px; }}
+h1 {{ font-family: var(--font-display); font-size: clamp(26px, 3.8vw, 40px); margin: 0; line-height: 1.2; }}
+h2 {{ font-size: 17px; margin: 0 0 4px; }}
+.lede {{ margin: 10px 0 0; color: var(--muted); max-width: 72ch; font-size: 15px; }}
+.top {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 20px; align-items: start; }}
+@media (max-width: 900px) {{ .top {{ grid-template-columns: 1fr; }} }}
+.panel {{ background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }}
+.map {{ position: relative; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }}
 .map img {{ display: block; width: 100%; height: auto; }}
 .box {{ position: absolute; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 3px; text-decoration: none; }}
 .box:hover, .box:focus-visible {{ background: color-mix(in srgb, var(--accent) 30%, transparent); outline: none; }}
-.box span {{ position: absolute; left: 3px; top: 2px; font-size: 11px; font-weight: 700; color: #0b2430; background: rgba(255,255,255,.85); padding: 0 4px; border-radius: 3px; white-space: nowrap; }}
-.cards {{ display: grid; gap: 10px; }}
-.card {{ display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: inherit; text-decoration: none; }}
-.card:hover, .card:focus-visible {{ border-color: var(--accent); outline: none; }}
-.card h2 {{ font-size: 15px; margin: 0; color: var(--accent); }}
-.card p {{ margin: 2px 0 6px; color: var(--muted); font-size: 13px; }}
-dl {{ display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; }}
-dl div {{ display: flex; gap: 6px; align-items: baseline; }}
-dt {{ color: var(--muted); font-size: 12px; }}
-dd {{ margin: 0; font-size: 13px; }}
-.res {{ margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }}
+.box span {{ position: absolute; left: 3px; top: 2px; font-size: 11px; font-weight: 700; color: #0b2430; background: rgba(255,255,255,.88); padding: 0 4px; border-radius: 3px; white-space: nowrap; }}
+.hint {{ color: var(--muted); font-size: 12.5px; margin: 4px 0 0; }}
+.legend {{ display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); margin: 8px 0 4px; }}
+.legend i {{ display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }}
+.bars {{ display: grid; gap: 10px; margin-top: 6px; }}
+.brow {{ display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; align-items: center; }}
+@media (max-width: 480px) {{ .brow {{ grid-template-columns: 1fr; gap: 3px; }} .brow.axis .bname {{ display: none; }} }}
+.bname {{ font-size: 13px; font-weight: 500; color: var(--ink); text-decoration: none; text-align: right; }}
+@media (max-width: 480px) {{ .bname {{ text-align: left; }} }}
+a.bname:hover {{ color: var(--accent); text-decoration: underline; }}
+.btrack {{ position: relative; display: grid; gap: 2px; padding-right: 44px; }}
+.btrack > i {{ position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--line); }}
+.bar {{ position: relative; height: 14px; display: flex; align-items: center; outline: none; }}
+.bar .fill {{ height: 100%; border-radius: 0 4px 4px 0; min-width: 1px; position: relative; z-index: 1; }}
+.bar.s1 .fill {{ background: var(--s1); }} .bar.s2 .fill {{ background: var(--s2); }}
+.bar .v {{ font-size: 11.5px; color: var(--muted); margin-left: 6px; position: relative; z-index: 1; }}
+.bar:hover .fill, .bar:focus-visible .fill {{ filter: brightness(1.12); }}
+.bar:focus-visible {{ box-shadow: 0 0 0 2px var(--accent); border-radius: 3px; }}
+.ticks {{ height: 16px; }}
+.ticks span {{ position: absolute; transform: translateX(-50%); font-family: var(--font-data); font-size: 11px; color: var(--muted); }}
+svg.cmp {{ display: block; width: 100%; height: auto; overflow: visible; }}
+svg.cmp text {{ font-family: var(--font-body); fill: var(--muted); font-size: 12px; }}
+svg.cmp .row {{ fill: var(--ink); font-size: 13px; font-weight: 500; }}
+svg.cmp a:hover .row {{ fill: var(--accent); text-decoration: underline; }}
+svg.cmp .val {{ font-family: var(--font-data); font-size: 11.5px; fill: var(--muted); }}
+svg.cmp .tick {{ font-family: var(--font-data); font-size: 11px; }}
+svg.cmp .grid {{ stroke: var(--line); stroke-width: 1; }}
+svg.cmp .s1 {{ fill: var(--s1); }} svg.cmp .s2 {{ fill: var(--s2); }}
+svg.cmp .hit {{ fill: transparent; }}
+svg.cmp .bar:hover path, svg.cmp .bar:focus path {{ opacity: .8; }} svg.cmp .bar:focus {{ outline: none; }}
+.tip {{ position: fixed; pointer-events: none; background: var(--ink); color: var(--surface); font-size: 12.5px; padding: 5px 9px; border-radius: 6px; z-index: 10; max-width: 280px; }}
+.section-head {{ display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }}
+.cards {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }}
+@media (max-width: 400px) {{ .cards {{ grid-template-columns: 1fr; }} }}
+.card {{ display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; color: inherit; text-decoration: none; transition: border-color .15s, transform .15s; }}
+.card:hover, .card:focus-visible {{ border-color: var(--accent); transform: translateY(-2px); outline: none; }}
+.thumb {{ aspect-ratio: 16 / 9; background: #dfe7ec; overflow: hidden; }}
+.thumb img {{ display: block; width: 100%; height: 100%; object-fit: cover; }}
+.body {{ padding: 12px 14px 14px; display: grid; gap: 8px; }}
+.card h3 {{ font-size: 16px; margin: 0; color: var(--accent); line-height: 1.35; }}
+.sub {{ margin: -4px 0 0; color: var(--muted); font-size: 13px; }}
+.facts {{ margin: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 12.5px; color: var(--muted); }}
+.facts b {{ color: var(--ink); font-weight: 500; }}
+.tiles {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }}
+.tile {{ background: var(--surface); padding: 8px 9px; display: grid; gap: 1px; min-width: 0; }}
+.t-label {{ font-size: 12px; color: var(--ink); font-weight: 500; line-height: 1.3; }}
+.tile-gate .t-label::before, .tile-rain .t-label::before, .tile-pump .t-label::before {{ content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }}
+.tile-gate .t-label::before {{ background: var(--s1); }} .tile-rain .t-label::before {{ background: var(--s2); }} .tile-pump .t-label::before {{ background: var(--s3); }}
+.t-value {{ font-size: 21px; line-height: 1.2; }}
+.t-value small {{ font-size: 12px; color: var(--muted); margin-left: 3px; font-family: var(--font-body); }}
+.t-sub {{ font-size: 11.5px; color: var(--muted); line-height: 1.3; }}
+@media (max-width: 440px) {{ .tiles {{ grid-template-columns: 1fr; }} .tile {{ grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 10px; }} .t-value {{ grid-row: span 2; text-align: right; }} }}
+.foot {{ margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; display: grid; gap: 2px; }}
+.foot b {{ color: var(--ink); font-weight: 500; }}
 .num {{ font-family: var(--font-data); font-variant-numeric: tabular-nums; }}
-.notes {{ background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; color: var(--muted); font-size: 13px; }}
-.notes ul {{ margin: 6px 0 0; padding-left: 20px; }}
+.notes {{ color: var(--muted); font-size: 13px; }}
+.notes ul {{ margin: 6px 0 0; padding-left: 20px; display: grid; gap: 3px; }}
+.notes b {{ color: var(--ink); }}
 footer {{ color: var(--muted); font-size: 12px; }}
 footer a, .notes a {{ color: var(--accent); }}
 </style>
@@ -169,38 +240,63 @@ footer a, .notes a {{ color: var(--accent); }}
 <body>
 <main>
   <header>
+    <p class="eyebrow">TAIPEI RIVER FLOOD SIMULATOR・7 個河段</p>
     <h1>臺北市河川淹水模擬</h1>
-    <p class="lede">從新店溪出發，沿淡水河、基隆河、景美溪把臺北市主要河段都做成互動模擬：調整洪水規模、潮位、雨量與疏散門狀態，看哪座水門先被漫過、堤內哪裡會淹。點地圖上的框或右側卡片進入各河段。</p>
+    <p class="lede">從新店溪出發，沿淡水河、基隆河、景美溪把臺北市主要河段都做成互動模擬：調整洪水規模、潮位、雨量與疏散門狀態，看哪座水門先被漫過、堤內哪裡會淹。每個河段另外在 GPU 上算了上百個降雨與水門失效情境，可以直接比較「多大的雨、哪座門」會淹多少。</p>
   </header>
-  <div class="layout">
+  <div class="top">
     <div class="map">
       <img src="map.jpg" width="{w}" height="{h}" alt="臺北市 20 m 地形暈渲圖，標出各河段模擬範圍">
 {boxes}
     </div>
+    <section class="panel" aria-labelledby="cmpH">
+      <h2 id="cmpH">哪個河段比較怕外水、哪個比較怕大雨？</h2>
+      <p class="hint">尖峰淹水面積（8 小時內堤內水深 ≥ 0.1 m 的最大面積），GPU 情境集合結果。點河段名稱進入該頁。</p>
+      <div class="legend"><span><i style="background:var(--s1)"></i>關鍵水門未關・計畫洪峰 100%（新店溪 7,000 m³/s）</span><span><i style="background:var(--s2)"></i>時雨量 130 mm・1 小時</span></div>
+      {chart}
+      <p class="hint">{chart_note}</p>
+    </section>
+  </div>
+  <section aria-labelledby="regH">
+    <div class="section-head"><h2 id="regH">七個河段</h2><span class="hint">卡片數字都是尖峰淹水面積（公頃）；封面是 Blender 由同一份地形與建物資料算出的 3D 圖</span></div>
     <div class="cards">
 {chr(10).join(cards)}
     </div>
-  </div>
-  <section class="notes">
+  </section>
+  <section class="panel notes">
     <b>共同的模型設定</b>
     <ul>
-      <li>地形：內政部 2025 年 20 m DEM；堤線沿河道邊緣自動建立，必要處依地形與 OpenStreetMap 手動補描。</li>
-      <li>河道水位以「計畫洪峰流量的百分比」在常水位與計畫洪水位之間內插，屬示意，不是水理演算。</li>
+      <li>地形：內政部 2025 年 20 m DEM；堤線沿河道邊緣自動建立，必要處依地形與 OpenStreetMap 手動補描。頁面 3D 與卡片封面的地形底圖（暈渲、環境遮蔽、建物落影）由 Blender 依同一份資料算出。</li>
+      <li>河道水位以「計畫洪峰流量的百分比」在常水位與計畫洪水位之間內插，屬示意，不是水理演算；超過 120% 時各河段的面積主要來自越堤，絕對值只能看相對順序。</li>
       <li>疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足；士林・社子與北投・關渡兩份資料都沒有疏散門，頁面上的「水門」是依道路穿越堤線處設定的假想缺口。</li>
-      <li>堤內淹水以二維局部慣性淺水波法計算，排水系統依臺北市雨水下水道與抽水站設計標準。</li>
-      <li>雨型是以 T+3 h 為中心、長度等於「降雨延時」的定強度降雨；「時雨量 110 mm」情境是 1 小時。每個頁面都可疊上臺北市水利處「降雨積水模擬圖」（112 年版）對照。</li>
+      <li>堤內淹水以二維局部慣性淺水波法計算，排水系統依臺北市雨水下水道（78.8 mm/hr）與抽水站設計標準；GPU 情境集合用同一套模型的 PyTorch 移植版在 Colab 批次計算，與瀏覽器結果逐格一致。</li>
+      <li>雨型是以 T+3 h 為中心、長度等於「降雨延時」的定強度降雨。和臺北市水利處「降雨積水模擬圖」（112 年版）比：平地河段面積量級相近、山區河段偏高，位置命中率多在兩成以下（本模型是 20 m 網格、集總式下水道、沒有排水溪流），街道尺度的積水點請看各頁面的疊圖。</li>
       <li>各河段範圍邊界視為封閉，相鄰河段之間的水不互通。</li>
-      <li>卡片上的公頃數是固定情境在 4 小時時的堤內淹水面積（水深 ≥ 0.1 m），用來比較各河段的相對規模，不是淹水潛勢圖。「短延時 100 mm/h」一列是本模型與臺北市水利處降雨積水模擬圖（112 年版）的對照：平地河段面積量級相近、山區河段偏高，位置命中率多在兩成以下，街道尺度的積水點請看各頁面的疊圖。</li>
     </ul>
   </section>
   <footer>
     教學與情境比較用的簡化模擬，不是官方淹水預報或疏散指示。
-    資料：內政部國土測繪中心 20 m DEM（政府資料開放授權條款第 1 版）、臺北市 3D 近似建物模型（經 <a href="https://github.com/sheethub/tpe3d">sheethub/tpe3d</a> 轉換）、臺北市抽水站、© OpenStreetMap contributors（ODbL）。
+    資料：內政部國土測繪中心 20 m DEM（政府資料開放授權條款第 1 版）、臺北市 3D 近似建物模型（經 <a href="https://github.com/sheethub/tpe3d">sheethub/tpe3d</a> 轉換）、臺北市抽水站、臺北市疏散門資訊、臺北市降雨積水模擬圖、© OpenStreetMap contributors（ODbL）。
     原始碼：<a href="https://github.com/henrychao521/xindian-flood-sim">github.com/henrychao521/xindian-flood-sim</a>
   </footer>
 </main>
+<div class="tip" id="tip" hidden></div>
+<script>
+// 比較圖的滑鼠／鍵盤提示
+(() => {{
+  const tip = document.getElementById("tip");
+  const show = (el, x, y) => {{ tip.textContent = el.dataset.tip; tip.hidden = false; tip.style.left = Math.min(x + 12, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (y + 14) + "px"; }};
+  document.querySelectorAll(".bars .bar").forEach(el => {{
+    el.addEventListener("mousemove", e => show(el, e.clientX, e.clientY));
+    el.addEventListener("mouseleave", () => tip.hidden = true);
+    el.addEventListener("focus", () => {{ const r = el.getBoundingClientRect(); show(el, r.left + r.width / 3, r.top); }});
+    el.addEventListener("blur", () => tip.hidden = true);
+  }});
+}})();
+</script>
 </body>
 </html>
 '''
 (OUT / "index.html").write_text(html, encoding="utf-8")
 print("wrote", OUT / "map.jpg", w, h, len(regs), "regions")
+

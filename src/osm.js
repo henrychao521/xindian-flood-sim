@@ -107,14 +107,14 @@ function buildOSM3D(scene) {
   // 設施：直立標柱
   const pubs = new THREE.Group();
   PUBS.forEach(p => {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1, 10), new THREE.MeshLambertMaterial({ color: 0x5b2a86 }));
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.6, 1, 12), new THREE.MeshLambertMaterial({ color: 0x5b2a86 }));
     m.userData = p; pubs.add(m);
   });
   scene.add(pubs);
   const og = new THREE.Group(), gm = new THREE.MeshLambertMaterial({ color: 0xbbbbbb });
   (OSM_DATA.gates || []).forEach(gt => { const m = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 1.6), gm); m.userData = gt; og.add(m); });
   scene.add(og); T3.ogates = og;
-  PUBS.filter(p => p.t === "fire_station" || (p.t === "hospital" && /醫院$/.test(p.n))).forEach(p => T3.addLabel(p.n, p.x / DEM.d - 0.5, p.y / DEM.d - 0.5, DEM.z[p.k] + 14));
+  PUBS.filter(p => p.t === "fire_station" || (p.t === "hospital" && /醫院$/.test(p.n))).forEach(p => T3.addLabel(p.n, p.x / DEM.d - 0.5, p.y / DEM.d - 0.5, DEM.tz[p.k] + 8));
   Object.assign(T3, { roads, deck, pubs });
   positionOSM3D();
 }
@@ -123,17 +123,17 @@ function positionOSM3D() {
   const s = T3.ex / DEM.d, W = DEM.nx, H = DEM.ny, L = (x, y) => [x / DEM.d - W / 2, -(y / DEM.d - H / 2)];
   const pos = T3.roads.geometry.attributes.position.array;
   ROAD_SEGS.forEach((g, n) => {
-    const y = DEM.z[g.k] * s + 0.12, [a, b] = L(g.xa, g.ya), [c, d] = L(g.xb, g.yb), o = n * 6;
+    const y = DEM.tz[g.k] * s + 0.12, [a, b] = L(g.xa, g.ya), [c, d] = L(g.xb, g.yb), o = n * 6;
     pos[o] = a; pos[o + 1] = y; pos[o + 2] = b; pos[o + 3] = c; pos[o + 4] = y; pos[o + 5] = d;
   });
   T3.roads.geometry.attributes.position.needsUpdate = true;
   T3.deck.children.forEach(m => {
     const { x1, y1, x2, y2, layer } = m.userData, k1 = cellAt(x1, y1), k2 = cellAt(x2, y2);
-    const zg = Math.max(k1 >= 0 ? DEM.z[k1] : 0, k2 >= 0 ? DEM.z[k2] : 0, 8);
+    const zg = Math.max(k1 >= 0 ? DEM.tz[k1] : 0, k2 >= 0 ? DEM.tz[k2] : 0, 8);  // 顯示高程（山坡上的橋原本會浮在半空）
     m.position.y = (zg + 6 + 3 * (layer - 1)) * s;
   });
-  T3.pubs.children.forEach(m => { const p = m.userData, base = dispZ(DEM.z[p.k]) * s; m.scale.y = 6; m.position.y = base + 3; });
-  T3.ogates.children.forEach(m => { const gt = m.userData, [lx, lz] = L(gt.x, gt.y); m.position.set(lx, 11.4 * s, lz); });
+  T3.pubs.children.forEach(m => { const p = m.userData, base = DEM.tz[p.k] * s, [lx, lz] = L(p.x, p.y); m.scale.y = 1.4; m.position.set(lx, base + 0.7, lz); });  // 原本漏設水平位置，全部疊在原點成一根柱子
+  T3.ogates.children.forEach(m => { const gt = m.userData, [lx, lz] = L(gt.x, gt.y), k = cellAt(gt.x, gt.y); m.position.set(lx, (Math.max(k >= 0 ? DEM.tz[k] : 0, 9) + 0.6) * s, lz); });
 }
 function colorOSM3D(lvl) {
   if (!T3.roads) return;

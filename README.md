@@ -30,6 +30,18 @@ scripts/run_checks.sh [id …]              # 以上全部＋tests/region_check.
 SKIP_DATA=1 scripts/run_checks.sh [id …]  # 只改 src/ 時：跳過 build_region.py（不需 OSM／DEM），重建頁面＋檢查＋總覽
 ```
 
+### 3D 地形底圖與封面（Blender）
+
+```sh
+python3 scripts/look.py                   # 各河段色階與等高線範圍 → data/processed/<id>/look.json
+python3 scripts/display_dem.py            # 3D 顯示高程（原始 DEM、市界外補值、堤防加寬）→ disp.json（需 work/taipei_dem20.npz）
+blender -b --factory-startup --python scripts/blender_terrain.py -- <id> tex    # 地形＋建物落影兩張 → work/blender/
+python3 scripts/compose_texture.py <id>   # 合成 → tex/<id>.jpg（3D 地形與等高線圖的底圖）
+blender -b --factory-startup --python scripts/blender_terrain.py -- <id> hero   # 斜俯視封面 → work/blender/<id>_hero.png（轉成 overview/img/<id>.jpg）
+```
+
+沒有 Blender 時頁面仍可用：沒有 `tex/<id>.jpg` 就用頂點色與簡易暈渲。
+
 ### 降雨情境集合（Colab GPU）
 
 ```sh
@@ -47,7 +59,7 @@ python3 scripts/sweep_table.py                           # 結果表（docs/STAG
 ## 功能
 
 - 河道水位縱斷面與各河段疏散門開關情境（新店溪：華江、華中、馬場町、古亭、景福）
-- 內政部 20 m 實測 DEM 地形、等高線與 3D 建物（臺北市 3D 近似建物模型）
+- 內政部 20 m 實測 DEM 地形、等高線與 3D 建物（臺北市 3D 近似建物模型）；地形底圖（暈渲、環境遮蔽、建物落影）與總覽封面由 Blender 依同一份資料算出
 - 二維局部慣性淺水波水流（Bates et al., 2010），建物以孔隙率法處理
 - 雨水下水道（78.8 mm/hr）與抽水站（45–60 mm/hr）排水模型
 - OpenStreetMap 道路、橋樑、公共設施淹水狀態

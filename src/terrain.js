@@ -11,6 +11,18 @@ const DEM = (() => {
   return { nx: DEM_DATA.nx, ny: DEM_DATA.ny, x0: DEM_DATA.x0, y0: DEM_DATA.y0, d: DEM_DATA.d, z, mask };
 })();
 const DEM_GATES = Object.fromEntries(GATES.map(g => [g.id, g.name]));
+// 3D 顯示用高程：原始 DEM（不含水理用的窪地填平與 320 m 截頂），臺北市界外以周邊高程平滑補值（DEM.nodata 標記）；15 m 以上壓縮成 1/10
+function dispZ(z) { return z > 15 ? 15 + (z - 15) * 0.1 : z; }
+(() => {
+  const n = DEM.nx * DEM.ny; DEM.tz = new Float32Array(n); DEM.nodata = new Uint8Array(n);
+  const D = typeof DISP_DATA !== "undefined" && DISP_DATA ? DISP_DATA : null;
+  const raw = D ? atob(D.z) : null, nr = D ? atob(D.nodata) : null;
+  for (let k = 0; k < n; k++) {
+    let z = DEM.z[k];
+    if (raw) { let v = raw.charCodeAt(2 * k) | (raw.charCodeAt(2 * k + 1) << 8); if (v > 32767) v -= 65536; z = v / 10; DEM.nodata[k] = nr.charCodeAt(k) & 1; }
+    DEM.tz[k] = dispZ(z);
+  }
+})();
 const idx = (i, j) => j * DEM.nx + i;
 // 每座水門的堤內入口格與最低窪處，作為積水擴散起點
 DEM.entry = {};
@@ -106,14 +118,20 @@ function floodStats(fr) {
   return out;
 }
 
-const ELEV_STOPS = [[-1, [74, 107, 125]], [2, [125, 150, 118]], [3, [150, 186, 128]], [4, [200, 214, 150]], [5, [230, 214, 150]], [6, [217, 178, 124]], [8, [190, 140, 98]], [11.2, [168, 164, 160]]];
-function elevRGB(z) {
-  if (z <= ELEV_STOPS[0][0]) return ELEV_STOPS[0][1];
-  for (let s = 1; s < ELEV_STOPS.length; s++) {
-    const [z1, c1] = ELEV_STOPS[s], [z0, c0] = ELEV_STOPS[s - 1];
-    if (z <= z1) { const f = (z - z0) / (z1 - z0); return c0.map((c, i) => c + (c1[i] - c) * f); }
-  }
-  return ELEV_STOPS[ELEV_STOPS.length - 1][1];
+// 地形色階：各河段依堤內高程範圍（LOOK.zlo–zhi，scripts/look.py）；zhi 以上是山坡，改用林地色。Blender 底圖用同一套色階
+const LOOK_DEF = { zlo: 2, zhi: 10, contour_step: 0.5, contour_major: 1, low: [[0, "#5f9483"], [0.22, "#94bd8f"], [0.45, "#d8dba4"], [0.7, "#e2bf8a"], [1, "#bf8f66"]], hill: [[0, "#bf8f66"], [6, "#9aa07a"], [40, "#7f9170"], [150, "#94998a"], [400, "#b9b7ae"]] };
+const LK = (typeof LOOK !== "undefined" && LOOK) ? LOOK : LOOK_DEF;
+function rampRGB(stops, v) {
+  const c = stops.map(([x, h]) => [x, hexToRgb(h)]);
+  if (v <= c[0][0]) return c[0][1];
+  for (let a = 1; a < c.length; a++) if (v <= c[a][0]) { const f = (v - c[a - 1][0]) / (c[a][0] - c[a - 1][0]); return c[a - 1][1].map((x, i) => x + (c[a][1][i] - x) * f); }
+  return c[c.length - 1][1];
+}
+function elevRGB(z) { return z <= LK.zhi ? rampRGB(LK.low, (z - LK.zlo) / (LK.zhi - LK.zlo)) : rampRGB(LK.hill, z - LK.zhi); }
+function renderRampLegend() {
+  const el = document.querySelector(".ramp"); if (!el) return;
+  const stops = LK.low.map(([t, h]) => `${h} ${Math.round(t * 100)}%`).join(", ");
+  el.innerHTML = `<span>EL. ${LK.zlo} m</span><span class="ramp-bar" style="background:linear-gradient(90deg, ${stops})"></span><span>${LK.zhi} m</span><span>・更高是山坡（綠灰）・等高線間距 ${LK.contour_step} m，粗線每 ${LK.contour_major} m・防洪牆深灰${LK.tex ? "・底圖以 Blender 算出暈渲與建物陰影" : ""}</span>`;
 }
 function cssColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function hexToRgb(h) { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map(c => c + c).join(""); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
@@ -121,10 +139,18 @@ function hexToRgb(h) { h = h.replace("#", ""); if (h.length === 3) h = h.split("
 // ---- 等高線圖 ----
 const CT = { scale: 3 };
 let contourBase = null, contourWater = null, contourHover = null;
+// Blender 底圖（與 3D 地形同一張）：載入後重畫等高線圖的底；失敗就用下面的簡易暈渲
+const TEX_IMG = (() => {
+  if (!LK.tex) return null;
+  const im = new Image(); im.decoding = "async";
+  im.onload = () => { im.ok = true; contourBase = null; if (typeof frames !== "undefined" && frames.length) renderContour(frames[tIdx]); };
+  im.src = LK.tex; return im;
+})();
 function buildContourBase() {
   const W = DEM.nx * CT.scale, H = DEM.ny * CT.scale;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const g = c.getContext("2d"), img = g.createImageData(DEM.nx, DEM.ny);
+  const texReady = TEX_IMG && TEX_IMG.ok;
   for (let j = 0; j < DEM.ny; j++) for (let i = 0; i < DEM.nx; i++) {
     const z = DEM.z[idx(i, j)];
     const zx = DEM.z[idx(Math.min(DEM.nx - 1, i + 1), j)] - DEM.z[idx(Math.max(0, i - 1), j)];
@@ -135,10 +161,13 @@ function buildContourBase() {
   }
   const tmp = document.createElement("canvas"); tmp.width = DEM.nx; tmp.height = DEM.ny; tmp.getContext("2d").putImageData(img, 0, 0);
   g.imageSmoothingEnabled = false; g.drawImage(tmp, 0, 0, W, H);
+  // 底圖涵蓋格中心到格中心：放在半格內縮的位置
+  if (texReady) { g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high"; g.drawImage(TEX_IMG, 0.5 * CT.scale, 0.5 * CT.scale, W - CT.scale, H - CT.scale); }
   // 等高線（marching squares，0.5 m 間距；整數公尺加粗）
   const P = (i, j) => [(i + 0.5) * CT.scale, (DEM.ny - 1 - j + 0.5) * CT.scale];
-  for (let L = 2.5; L <= 8.0001; L += 0.5) {
-    const major = Math.abs(L - Math.round(L)) < 1e-6;
+  const cs = LK.contour_step, cm = LK.contour_major;
+  for (let L = Math.ceil(LK.zlo / cs) * cs; L <= LK.zhi + 1e-6; L += cs) {
+    const major = Math.abs(L / cm - Math.round(L / cm)) < 1e-6;
     g.beginPath(); g.strokeStyle = major ? "rgba(40,30,20,.7)" : "rgba(40,30,20,.3)"; g.lineWidth = major ? 1.1 : 0.6;
     for (let j = 0; j < DEM.ny - 1; j++) for (let i = 0; i < DEM.nx - 1; i++) {
       if (DEM.mask[idx(i, j)] === 2) continue;
@@ -152,7 +181,7 @@ function buildContourBase() {
     g.stroke();
   }
   // 防洪牆
-  g.fillStyle = "rgba(60,60,60,.9)";
+  g.fillStyle = texReady ? "rgba(60,60,60,.55)" : "rgba(60,60,60,.9)";
   for (let j = 0; j < DEM.ny; j++) for (let i = 0; i < DEM.nx; i++) if (DEM.mask[idx(i, j)] === 2) g.fillRect(i * CT.scale, (DEM.ny - 1 - j) * CT.scale, CT.scale, CT.scale);
   contourBase = c;
 }
@@ -247,10 +276,10 @@ function inundLabel(k) {
 }
 function updateContourInfo() {
   const box = $("contourInfo"); if (!box) return;
-  if (!contourHover) { box.innerHTML = "把滑鼠移到地圖上查看實測高程與水深。等高線間距 0.5 m，粗線為整數公尺，深灰線為防洪牆。"; return; }
+  if (!contourHover) { box.innerHTML = `把滑鼠移到地圖上查看實測高程與水深。等高線間距 ${LK.contour_step} m，粗線每 ${LK.contour_major} m，深灰線為防洪牆。`; return; }
   const k = idx(contourHover.i, contourHover.j), z = DEM.z[k], l = contourWater && contourWater[k];
   const x = DEM.x0 + (contourHover.i + 0.5) * DEM.d, y = DEM.y0 + (contourHover.j + 0.5) * DEM.d;
-  const kind = DEM.mask[k] === 2 ? "防洪牆" : DEM.mask[k] === 1 ? "堤內" : DEM.mask[k] === 3 ? "對岸（不在模擬範圍）" : "堤外";
+  const kind = DEM.nodata[k] ? "臺北市界外（DEM 無資料，畫面補值）" : DEM.mask[k] === 2 ? "防洪牆" : DEM.mask[k] === 1 ? "堤內" : DEM.mask[k] === 3 ? "對岸（不在模擬範圍）" : "堤外";
   box.innerHTML = `TWD97 <span class="num">${Math.round(x)}, ${Math.round(y)}</span>・${kind}・地面 EL. <b class="num">${fmt(z)}</b> m・` + (l && !isNaN(l) ? `水深 <b class="num">${fmt(l - z)}</b> m` : "無積水") + inundLabel(k) + (typeof sweepLabel === "function" ? sweepLabel(k) : "");
   const pb = nearestPub(x - DEM.x0, y - DEM.y0); if (pb) box.innerHTML += `・<b>${pb.n}</b>（${pb.label}）`;
 }
@@ -280,18 +309,25 @@ function init3D() {
     camera.position.set(...CAM0);
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 4, 0); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.48; controls.minDistance = 40; controls.maxDistance = 700;
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.75));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-60, 120, 40); scene.add(sun);
+    // 光線方向與 Blender 底圖一致（西北方）；淡霧讓遠處退後
+    scene.add(new THREE.HemisphereLight(0xf4f1ea, 0x5a6470, 0.85));
+    const sun = new THREE.DirectionalLight(0xfff6e8, 0.7); sun.position.set(-90, 140, -90); scene.add(sun);
+    scene.fog = new THREE.Fog(0xe4ebf0, 420, 1100); renderer.setClearColor(0xe4ebf0, 1);
     const W = DEM.nx, H = DEM.ny;
     const tGeo = new THREE.PlaneGeometry(W, H, W - 1, H - 1); tGeo.rotateX(-Math.PI / 2);
     const tCol = new Float32Array(W * H * 3);
     for (let row = 0; row < H; row++) for (let col = 0; col < W; col++) {
-      const v = row * W + col, k = idx(col, H - 1 - row), c = DEM.mask[k] === 2 ? [110, 110, 110] : elevRGB(DEM.z[k]);
+      const v = row * W + col, k = idx(col, H - 1 - row), c = DEM.mask[k] === 2 ? [110, 110, 110] : DEM.nodata[k] ? [228, 224, 216] : elevRGB(DEM.z[k]);
       tCol[v * 3] = c[0] / 255; tCol[v * 3 + 1] = c[1] / 255; tCol[v * 3 + 2] = c[2] / 255;
     }
     tGeo.setAttribute("color", new THREE.BufferAttribute(tCol, 3));
     const terrain = new THREE.Mesh(tGeo, new THREE.MeshLambertMaterial({ vertexColors: true }));
     scene.add(terrain);
+    // Blender 算的底圖（暈渲、環境遮蔽、建物落影已烘進去）：載入後改用不受即時光照影響的材質；載入失敗就維持頂點色
+    if (LK.tex) new THREE.TextureLoader().load(LK.tex, tx => {
+      tx.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      terrain.material = new THREE.MeshBasicMaterial({ map: tx }); T3.texOK = true; T3.dirty = true;
+    }, undefined, () => { T3.texOK = false; });
     const wGeo = new THREE.PlaneGeometry(W, H, W - 1, H - 1); wGeo.rotateX(-Math.PI / 2);
     wGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(W * H * 3), 3));
     const water = new THREE.Mesh(wGeo, new THREE.MeshPhongMaterial({ vertexColors: true, transparent: true, opacity: 0.82, shininess: 80, depthWrite: false }));
@@ -322,15 +358,14 @@ function init3D() {
   }
 }
 const toLocal = (i, j) => [i - DEM.nx / 2 + 0.5, -(j - DEM.ny / 2 + 0.5)];
-// 3D 顯示用高程：15 m 以上的山丘壓縮成 1/10，避免垂直誇張後變成尖塔
-function dispZ(z) { return z > 15 ? 15 + (z - 15) * 0.1 : z; }
 function applyHeights() {
   if (!T3.ok) return;
   const pos = T3.terrain.geometry.attributes.position, W = DEM.nx, H = DEM.ny, s = T3.ex / DEM.d;
-  for (let row = 0; row < H; row++) for (let col = 0; col < W; col++) pos.setY(row * W + col, dispZ(DEM.z[idx(col, H - 1 - row)]) * s);
+  for (let row = 0; row < H; row++) for (let col = 0; col < W; col++) pos.setY(row * W + col, DEM.tz[idx(col, H - 1 - row)] * s);
   pos.needsUpdate = true; T3.terrain.geometry.computeVertexNormals();
-  T3.labels.forEach(l => { const [lx, lz] = toLocal(l.userData.i, l.userData.j); l.position.set(lx, l.userData.zEl * s, lz); });
-  Object.entries(DEM_DATA.gates).forEach(([id, [gi, gj]]) => { const [x, z] = toLocal(gi, gj); T3.gates[id].position.set(x, 11.8 * s, z); });
+  // 標籤：至少在地面上方 4 m（山坡上的標籤原本會埋進地形）
+  T3.labels.forEach(l => { const [lx, lz] = toLocal(l.userData.i, l.userData.j), g = DEM.tz[idx(Math.min(DEM.nx - 1, Math.max(0, l.userData.i)), Math.min(DEM.ny - 1, Math.max(0, l.userData.j)))]; l.position.set(lx, Math.max(Math.min(l.userData.zEl, g + 10), g + 4) * s, lz); });
+  Object.entries(DEM_DATA.gates).forEach(([id, [gi, gj]]) => { const [x, z] = toLocal(gi, gj); T3.gates[id].position.set(x, (Math.max(DEM.tz[idx(gi, gj)], 9) + 1) * s, z); });
   if (T3.bld) positionBuildings3D();
   positionOSM3D();
   T3.dirty = true;
@@ -354,10 +389,14 @@ function draw3DWater(tf) {
   const { lvl } = waterAt(tf); T3.lvl = lvl;
   const pos = T3.water.geometry.attributes.position, col = T3.water.geometry.attributes.color, W = DEM.nx, H = DEM.ny, s = T3.ex / DEM.d;
   const fl = hexToRgb(cssColor("--flood-map") || "#1b5fae"), rv = [43, 123, 181];
+  const surf = k => dispZ(DEM.z[k]) + lvl[k] - DEM.z[k];  // 濕格水面的顯示高度（用水理高程：顯示高程在加寬的堤防格與山區不同）
   for (let row = 0; row < H; row++) for (let c = 0; c < W; c++) {
-    const v = row * W + c, k = idx(c, H - 1 - row), z = DEM.z[k], l = lvl[k];
+    const v = row * W + c, j = H - 1 - row, k = idx(c, j), z = DEM.z[k], l = lvl[k];
     const wet = !isNaN(l);
-    pos.setY(v, wet ? (dispZ(z) + l - z) * s : (dispZ(z) - 0.4) * s);
+    let y = DEM.tz[k] - 0.4;
+    if (wet) y = surf(k);
+    else { let nb = -Infinity; if (c > 0 && !isNaN(lvl[k - 1])) nb = Math.max(nb, surf(k - 1)); if (c < W - 1 && !isNaN(lvl[k + 1])) nb = Math.max(nb, surf(k + 1)); if (j > 0 && !isNaN(lvl[k - W])) nb = Math.max(nb, surf(k - W)); if (j < H - 1 && !isNaN(lvl[k + W])) nb = Math.max(nb, surf(k + W)); if (nb > -Infinity) y = Math.min(nb, y); }
+    pos.setY(v, y * s);
     const base = DEM.mask[k] === 1 ? fl : rv, dpt = wet ? l - z : 0, f = 1 - Math.min(0.55, dpt / 4);
     col.setXYZ(v, base[0] / 255 * f, base[1] / 255 * f, base[2] / 255 * f);
   }
@@ -371,7 +410,7 @@ const BLD_CLASS = [
   { min: 0.5, label: "0.5–1 m", rgb: [242, 153, 74] },
   { min: 0.1, label: "0.1–0.5 m", rgb: [242, 201, 76] }
 ];
-const BLD_DRY = [222, 216, 206];
+const BLD_DRY = [236, 232, 224];
 function bldClass(d) { for (let c = 0; c < BLD_CLASS.length; c++) if (d >= BLD_CLASS[c].min) return c; return -1; }
 function buildingStats(fr) {
   const dep = inlandDepth(fr), cnt = [0, 0, 0], floor = [0, 0, 0];
@@ -387,7 +426,7 @@ function drawBuildingsOnMap(g, fr) {
     g.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${c >= 0 ? 0.95 : 0.55})`; g.fill(); g.stroke();
   });
 }
-const BLD_SCALE = 0.25; // 3D 中建物高度：每公尺 0.25 單位（約為實際比例的 5 倍）
+const BLD_SCALE = 0.2; // 3D 中建物高度：每公尺 0.2 單位（約為實際比例的 4 倍；地形是 12 倍）
 function buildBuildings3D(scene) {
   let nv = 0; const tris = BUILDINGS.map(b => {
     const contour = b.pts.map(([x, y]) => new THREE.Vector2(x, y));
@@ -405,7 +444,7 @@ function positionBuildings3D() {
   const pos = T3.bld.geometry.attributes.position.array, s = T3.ex / DEM.d;
   const L = (x, y) => [x / DEM.d - DEM.nx / 2, -(y / DEM.d - DEM.ny / 2)];
   BUILDINGS.forEach(b => {
-    const base = dispZ(DEM.z[b.cell]) * s - 0.05, top = dispZ(DEM.z[b.cell]) * s + b.h * BLD_SCALE;
+    const base = DEM.tz[b.cell] * s - 0.3, top = DEM.tz[b.cell] * s + b.h * BLD_SCALE;
     let o = b.v0 * 3; const n = b.pts.length;
     const put = (x, y, h) => { const [lx, lz] = L(x, y); pos[o++] = lx; pos[o++] = h; pos[o++] = lz; };
     for (let i = 0; i < n; i++) {

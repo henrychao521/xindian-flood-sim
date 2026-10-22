@@ -39,13 +39,13 @@ if region:
           <li><b>用途限於教學與情境比較。</b>實際的淹水潛勢與疏散資訊，請以經濟部水利署、臺北市政府工務局水利工程處公布的資料為準。</li>
         </ul>
       </section>'''
-    ph = {"@@OVERVIEW@@": "../overview/", "@@TITLE@@": cfg["title"], "@@LEDE@@": lede, "@@TERRAINHINT@@": terrain_hint, "@@NOTES@@": notes}
+    ph = {"@@OVERVIEW@@": "../overview/", "@@HERO@@": f"../overview/img/{region}.jpg", "@@TITLE@@": cfg["title"], "@@LEDE@@": lede, "@@TERRAINHINT@@": terrain_hint, "@@NOTES@@": notes}
     out = pathlib.Path(args[0]) if args else ROOT / region / "index.html"
 else:
     src = r(S / "page.src.html")
     data = "const DEM_DATA=" + r(D / "demW.json") + ";\nconst BLD_DATA=" + r(D / "bldW.json") + ";\nconst OSM_DATA=" + r(D / "osm2.json") + ";\nconst INUND_DATA=" + r(D / "xindian/inund.json") + ";\n"
     regiondata = r(S / "xindian_data.js")
-    ph = {"@@OVERVIEW@@": "overview/"}
+    ph = {"@@OVERVIEW@@": "overview/", "@@HERO@@": "overview/img/xindian.jpg"}
     out = pathlib.Path(args[0]) if args else ROOT / "index.html"
 
 # Colab GPU 降雨情境集合（scripts/flow_torch.py sweep）：有結果才嵌入
@@ -69,6 +69,12 @@ if (sd / "river.json").exists():
     if (sd / "river_maps.json").exists(): rv["maps"] = json.loads(r(sd / "river_maps.json"))
     river = json.dumps(rv, ensure_ascii=False, separators=(",", ":"))
 data += "const RIVER_DATA=" + river + ";\n"
+# 地形色階、顯示高程、Blender 底圖（scripts/look.py、display_dem.py、blender_terrain.py＋compose_texture.py）
+rid_ = region or "xindian"; lk = json.loads(r(sd / "look.json")) if (sd / "look.json").exists() else None
+if lk and (ROOT / "tex" / f"{rid_}.jpg").exists():
+    lk["tex"] = f"tex/{rid_}.jpg" if (not region or "--local-three" in sys.argv) else f"../tex/{rid_}.jpg"  # 測試頁在 work/checks（有 tex 連結）
+data += "const LOOK=" + (json.dumps(lk, ensure_ascii=False) if lk else "null") + ";\n"
+data += "const DISP_DATA=" + (r(sd / "disp.json") if (sd / "disp.json").exists() else "null") + ";\n"
 for a, b in [("//@@DEMDATA@@", data), ("//@@SWEEP@@", r(S / "sweep.js")), ("//@@REGIONDATA@@", regiondata), ("//@@ENGINE@@", r(S / "engine.js")), ("//@@TERRAIN@@", r(S / "terrain.js")), ("//@@FLOW@@", r(S / "flow.js") + "\n" + r(S / "osm.js"))]:
     assert a in src, a
     src = src.replace(a, b)

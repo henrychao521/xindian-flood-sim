@@ -50,7 +50,12 @@ body {
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 .wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 18px; }
-header { display: grid; gap: 6px; }
+header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: 22px; align-items: center; }
+.head-text { display: grid; gap: 6px; min-width: 0; }
+.hero { margin: 0; min-width: 0; }
+.hero img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); background: var(--accent-soft); }
+.hero figcaption { font-size: 11.5px; color: var(--muted); margin-top: 4px; text-align: right; }
+@media (max-width: 860px) { header { grid-template-columns: minmax(0, 1fr); } .hero img { aspect-ratio: 21 / 9; } .hero figcaption { text-align: left; } }
 .eyebrow { font-size: 12px; letter-spacing: .08em; color: var(--muted); }
 .navlink { color: var(--accent); text-decoration: none; } .navlink:hover { text-decoration: underline; }
 h1 { font-family: var(--font-display); font-size: clamp(24px, 3.4vw, 34px); margin: 0; text-wrap: balance; line-height: 1.25; }
@@ -63,6 +68,7 @@ h2 { font-size: 15px; margin: 0; font-weight: 700; }
 .num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
 
 .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) { .presets { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; margin-right: -16px; padding-right: 16px; -webkit-overflow-scrolling: touch; } .preset { flex: 0 0 auto; scroll-snap-align: start; } }
 .preset {
   font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   border-radius: 999px; padding: 6px 14px; cursor: pointer;
@@ -172,9 +178,12 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
 
 <div class="wrap">
   <header>
+    <div class="head-text">
     <div class="eyebrow"><a class="navlink" href="@@OVERVIEW@@">← 全市河川總覽</a>・TWVD 2001 高程（EL. m）・模擬時長 8 小時</div>
     <h1>@@TITLE@@</h1>
     <p class="lede">@@LEDE@@</p>
+    </div>
+    <figure class="hero"><img src="@@HERO@@" width="1200" height="675" alt="本河段的 3D 地形與建物（Blender 依同一份資料算圖）" onerror="this.parentNode.remove()"><figcaption>3D 地形與建物，Blender 算圖（垂直誇張 5 倍）</figcaption></figure>
   </header>
 
   <div class="presets" id="presets" role="group" aria-label="情境範例"></div>
@@ -749,7 +758,7 @@ $("inundCase").addEventListener("change", () => { if (frames.length) renderConto
 bindRange("q", "Qpeak"); bindRange("tide", "tide"); bindRange("rain", "rain"); bindRange("sewer", "sewerMM"); bindRange("pumpmm", "pumpMM"); bindRange("avail", "avail"); bindRange("cc", "C"); bindRange("open", "openPct"); bindRange("close", "closeAt");
 $("tideSync").addEventListener("change", e => { P.tideSync = e.target.checked; activePreset = null; syncControls(); recompute(); });
 $("cPdf").addEventListener("change", e => { P.C = e.target.checked ? 17 : Number($("cc").value) || 1.55; activePreset = null; syncControls(); recompute(); });
-bindContourHover(); if (typeof bindSweep === "function") bindSweep(); init3D();
+bindContourHover(); renderRampLegend(); if (typeof bindSweep === "function") bindSweep(); init3D();
 $("showBld").addEventListener("change", e => { if (T3.bld) T3.bld.visible = e.target.checked; });
 $("ex").addEventListener("input", e => { T3.ex = Number(e.target.value); $("exOut").textContent = T3.ex + "×"; applyHeights(); });
 $("reset3d").addEventListener("click", () => { if (!T3.ok) return; T3.camera.position.set(...CAM0); T3.controls.target.set(0, 4, 0); });

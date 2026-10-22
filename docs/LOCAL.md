@@ -37,6 +37,7 @@ python3 scripts/mosaic.py          # → work/taipei_dem20.npz
 | 全部重跑＋情境檢查＋對照＋總覽 | `bash scripts/run_checks.sh`（單一河段：`bash scripts/run_checks.sh tamsui`） |
 | 新店溪回歸測試（水門水理不變） | `node tests/regress.js <舊版html> <新版html>`，期望 `SAME` |
 | 結果表 | `python3 scripts/results_table.py` |
+| 重算 3D 底圖與封面（Blender 5.1） | 見 README「3D 地形底圖與封面」；七個河段底圖各約 30 秒、封面各約 5 秒（Metal GPU） |
 | 本機預覽 | `python3 -m http.server 8080` → http://localhost:8080/overview/ |
 
 推上 `main` 後 GitHub Pages 約一兩分鐘更新。
