@@ -36,7 +36,7 @@ j = p.index("      </section>\n", i) + len("      </section>\n")
 p = p[:i] + "@@NOTES@@\n" + p[j:]
 # 情境範例
 i = p.index("const DRAIN0 = "); j = p.index("];\n", i) + 3
-p = p[:i] + '''const DRAIN0 = { sewerMM: 78.8, pumpMM: 60, avail: 100, rainHours: 2 };
+p = p[:i] + '''const DRAIN0 = { sewerMM: 78.8, pumpMM: 60, avail: 100, rainHours: 2, streams: true };
 const KG0 = GATES[REGION.keyGate].id, base = { tide: 1.6, tideSync: true, rain: 40, ...DRAIN0, C: 1.55, openPct: 100, closeAt: 8 };
 const PRESETS = [
   { id: "flood80", name: "計畫洪峰 80%＋大潮（水門正常）", p: { ...base, Qpeak: 80, gateOpen: {} } },

@@ -11,6 +11,18 @@ const DEM = (() => {
   return { nx: DEM_DATA.nx, ny: DEM_DATA.ny, x0: DEM_DATA.x0, y0: DEM_DATA.y0, d: DEM_DATA.d, z, mask };
 })();
 const DEM_GATES = Object.fromEntries(GATES.map(g => [g.id, g.name]));
+// 堤內明渠溪流（OSM，scripts/build_streams.py）：格索引與畫地圖用的折線
+const STREAMS = (() => { const S = typeof STREAM_DATA !== "undefined" && STREAM_DATA ? STREAM_DATA : { cells: [], lines: [], names: {} }; return { cells: Int32Array.from(S.cells), lines: S.lines, names: S.names }; })();
+function drawStreamsOnMap(g) {
+  if (!STREAMS.lines.length) return;
+  const sc = CT.scale / DEM.d, H = DEM.ny * CT.scale;
+  g.save(); g.lineCap = "round"; g.lineJoin = "round";
+  g.strokeStyle = "rgba(255,255,255,.85)"; g.lineWidth = 3.4;
+  STREAMS.lines.forEach(([, pts]) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x * sc, H - y * sc) : g.moveTo(x * sc, H - y * sc)); g.stroke(); });
+  g.strokeStyle = P.streams !== false ? "#1f78b4" : "rgba(31,120,180,.4)"; g.lineWidth = 1.7;
+  STREAMS.lines.forEach(([, pts]) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x * sc, H - y * sc) : g.moveTo(x * sc, H - y * sc)); g.stroke(); });
+  g.restore();
+}
 // 3D 顯示用高程：原始 DEM（不含水理用的窪地填平與 320 m 截頂），臺北市界外以周邊高程平滑補值（DEM.nodata 標記）；15 m 以上壓縮成 1/10
 function dispZ(z) { return z > 15 ? 15 + (z - 15) * 0.1 : z; }
 (() => {
@@ -216,6 +228,7 @@ function renderContour(fr) {
   g.imageSmoothingEnabled = false; g.drawImage(wc, 0, 0, W, H);
   REGION.labels.forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
   drawBuildingsOnMap(g, fr);
+  drawStreamsOnMap(g);
   drawOSMOnMap(g, waterLevels(fr));
   drawInundOverlay(g, W, H);  // 疊在道路與建物之上，官方積水格多半在街道上
   if (typeof drawSweepOverlay === "function") drawSweepOverlay(g, W, H);

@@ -115,7 +115,14 @@ function buildOSM3D(scene) {
   (OSM_DATA.gates || []).forEach(gt => { const m = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 1.6), gm); m.userData = gt; og.add(m); });
   scene.add(og); T3.ogates = og;
   PUBS.filter(p => p.t === "fire_station" || (p.t === "hospital" && /醫院$/.test(p.n))).forEach(p => T3.addLabel(p.n, p.x / DEM.d - 0.5, p.y / DEM.d - 0.5, DEM.tz[p.k] + 8));
-  Object.assign(T3, { roads, deck, pubs });
+  // 山區溪流（OSM 明渠）：貼地藍線
+  const segs = []; STREAMS.lines.forEach(([, pts]) => { for (let i = 0; i + 1 < pts.length; i++) if (cellAt(...pts[i]) >= 0 && cellAt(...pts[i + 1]) >= 0) segs.push([pts[i], pts[i + 1]]); });  // 範圍外的線段不畫
+  let streams3 = null;
+  if (segs.length) {
+    const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segs.length * 6), 3));
+    streams3 = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ color: 0x1f78b4 })); streams3.userData.segs = segs; streams3.frustumCulled = false; scene.add(streams3);
+  }
+  Object.assign(T3, { roads, deck, pubs, streams3 });
   positionOSM3D();
 }
 function positionOSM3D() {
@@ -127,6 +134,14 @@ function positionOSM3D() {
     pos[o] = a; pos[o + 1] = y; pos[o + 2] = b; pos[o + 3] = c; pos[o + 4] = y; pos[o + 5] = d;
   });
   T3.roads.geometry.attributes.position.needsUpdate = true;
+  if (T3.streams3) {
+    const sp = T3.streams3.geometry.attributes.position.array;
+    T3.streams3.userData.segs.forEach(([[x1, y1], [x2, y2]], n) => {
+      const k1 = cellAt(x1, y1), k2 = cellAt(x2, y2), [a, b] = L(x1, y1), [c, d] = L(x2, y2), o = n * 6;
+      sp[o] = a; sp[o + 1] = (k1 >= 0 ? DEM.tz[k1] : 0) * s + 0.2; sp[o + 2] = b; sp[o + 3] = c; sp[o + 4] = (k2 >= 0 ? DEM.tz[k2] : 0) * s + 0.2; sp[o + 5] = d;
+    });
+    T3.streams3.geometry.attributes.position.needsUpdate = true;
+  }
   T3.deck.children.forEach(m => {
     const { x1, y1, x2, y2, layer } = m.userData, k1 = cellAt(x1, y1), k2 = cellAt(x2, y2);
     const zg = Math.max(k1 >= 0 ? DEM.tz[k1] : 0, k2 >= 0 ? DEM.tz[k2] : 0, 8);  // 顯示高程（山坡上的橋原本會浮在半空）

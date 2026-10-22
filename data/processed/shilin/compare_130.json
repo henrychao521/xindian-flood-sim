@@ -4,16 +4,16 @@
  "inland_ha": 2040.0,
  "ge15cm": {
   "official_ha": 110.8,
-  "model_ha": 21.8,
-  "iou": 0.023,
-  "hit_rate": 0.027,
-  "false_alarm": 0.862
+  "model_ha": 19.3,
+  "iou": 0.022,
+  "hit_rate": 0.025,
+  "false_alarm": 0.855
  },
  "ge50cm": {
   "official_ha": 15.7,
-  "model_ha": 1.6,
-  "iou": 0.014,
-  "hit_rate": 0.015,
-  "false_alarm": 0.85
+  "model_ha": 1.5,
+  "iou": 0.012,
+  "hit_rate": 0.013,
+  "false_alarm": 0.868
  }
 }

@@ -243,6 +243,10 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <input type="range" id="pumpmm" min="0" max="90" step="5">
           <div class="hint">設計標準 45 mm/hr（5 年重現期颱風雨），新建或更新時提高到 60 mm/hr。</div>
         </div>
+        <div class="ctl" id="streamCtl">
+          <label class="check"><input type="checkbox" id="streamOn"> 山區溪流可排水</label>
+          <div class="hint" id="streamHint"></div>
+        </div>
         <div class="ctl">
           <div class="ctl-head"><label for="avail">抽水機可用率</label><output id="availOut" class="num"></output></div>
           <input type="range" id="avail" min="0" max="100" step="10">
@@ -334,7 +338,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
             <div class="legend inund-ctl" id="sweepCtl"><label class="check" for="sweepLayer">疊上 GPU 情境集合（128 個降雨情境，Colab 批次計算）</label><select id="sweepLayer" aria-label="情境集合圖層"><option value="none" selected>不疊圖</option><option value="thresh">淹水門檻：多大的雨會淹到這裡（1 h 定強度）</option><option value="prob">淹水機率（設計排水，32 個強度×延時情境）</option><option value="hmax">最大水深包絡（1 h 定強度，可選強度）</option><option value="gate" id="sweepLayerGateOpt">水門失效包絡（選水門）</option></select><select id="sweepCase" aria-label="包絡圖降雨強度"></select><select id="sweepGate" aria-label="水門失效包絡的水門"></select><span id="sweepThreshLegend"></span><span><i style="background:rgb(230,90,30);opacity:.7;height:8px"></i>機率越高越濃（&lt; 25% 不畫）</span><span><i style="background:rgb(90,40,200);opacity:.7;height:8px"></i>最大水深越深越濃</span></div>
             <div class="hint">水利處模擬圖是 1 小時短延時降雨、河道常水位、依實際雨水下水道網路計算的結果；要對照請選「短延時暴雨 100 mm/h」情境。資料：臺北市政府工務局水利工程處（data.taipei，政府資料開放授權條款第 1 版）。</div>
             <div class="ramp"><span>EL. 3 m</span><span class="ramp-bar"></span><span>8 m</span><span>・防洪牆為深灰色</span></div>
-            <div class="legend"><span><i style="background:#2b2b2b;height:4px"></i>橋樑</span><span><i style="background:#5b2a86;height:8px;border-radius:50%"></i>公共設施</span><span><i style="background:#fff;height:8px;border:2px solid #555;width:8px"></i>其他疏散門（OSM）</span><span><i style="background:rgb(214,69,65);height:3px"></i>道路中斷</span><span><i style="background:rgb(242,153,74);height:3px"></i>道路危險</span></div>
+            <div class="legend"><span><i style="background:#2b2b2b;height:4px"></i>橋樑</span><span><i style="background:#5b2a86;height:8px;border-radius:50%"></i>公共設施</span><span><i style="background:#fff;height:8px;border:2px solid #555;width:8px"></i>其他疏散門（OSM）</span><span><i style="background:rgb(214,69,65);height:3px"></i>道路中斷</span><span><i style="background:rgb(242,153,74);height:3px"></i>道路危險</span><span class="stream-leg"><i style="background:#1f78b4;height:3px"></i>山區溪流（OSM 明渠）</span></div>
             <div class="legend"><span><i style="background:rgb(222,216,206);height:8px"></i>建物未淹水</span><span><i style="background:rgb(242,201,76);height:8px"></i>建物周邊水深 0.1–0.5 m</span><span><i style="background:rgb(242,153,74);height:8px"></i>0.5–1 m</span><span><i style="background:rgb(214,69,65);height:8px"></i>≥ 1 m</span></div>
           </div>
           <div>
@@ -462,7 +466,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
 //@@ENGINE@@
 
 // ---------------- 介面狀態 ----------------
-const DRAIN0 = { sewerMM: 78.8, pumpMM: 60, avail: 100, rainHours: 2 };
+const DRAIN0 = { sewerMM: 78.8, pumpMM: 60, avail: 100, rainHours: 2, streams: true };
 const PRESETS = [
   { id: "pdf", name: "PDF 情境：馬場町門未關（外水 7.0 m）", p: { Qpeak: 5500, tide: 1.0, tideSync: true, rain: 40, ...DRAIN0, C: 1.55, openPct: 100, closeAt: 8, gateOpen: { machangding: true } } },
   { id: "shortrain", name: "短延時暴雨 100 mm/h（對照水利處模擬圖）", p: { Qpeak: 2000, tide: 1.0, tideSync: false, rain: 100, ...DRAIN0, rainHours: 1, C: 1.55, openPct: 100, closeAt: 8, gateOpen: {} } },
@@ -531,6 +535,7 @@ function syncControls() {
   $("sewer").value = P.sewerMM; $("sewerOut").textContent = fmt(P.sewerMM, 1) + " mm/hr";
   $("pumpmm").value = P.pumpMM; $("pumpOut").textContent = `${P.pumpMM} mm/hr ≈ ${fmtInt(toCms(P.pumpMM))} m³/s`;
   $("avail").value = P.avail; $("availOut").textContent = P.avail + "%";
+  $("streamOn").checked = P.streams !== false;
   $("open").value = P.openPct; $("openOut").textContent = P.openPct + "%";
   $("close").value = P.closeAt; $("closeOut").textContent = P.closeAt >= 8 ? "未封堵" : hhmm(P.closeAt);
   const pdfC = P.C >= 5; $("cPdf").checked = pdfC; $("cc").disabled = pdfC; if (!pdfC) $("cc").value = P.C; $("ccOut").textContent = pdfC ? "≈ 17（PDF）" : fmt(P.C, 2);
@@ -814,6 +819,11 @@ $("inundCase").addEventListener("change", () => { if (frames.length) renderConto
 bindRange("q", "Qpeak"); bindRange("tide", "tide"); bindRange("rain", "rain"); bindRange("sewer", "sewerMM"); bindRange("pumpmm", "pumpMM"); bindRange("avail", "avail"); bindRange("cc", "C"); bindRange("open", "openPct"); bindRange("close", "closeAt");
 $("tideSync").addEventListener("change", e => { P.tideSync = e.target.checked; activePreset = null; syncControls(); recompute(); });
 $("cPdf").addEventListener("change", e => { P.C = e.target.checked ? 17 : Number($("cc").value) || 1.55; activePreset = null; syncControls(); recompute(); });
+if (STREAMS.cells.length) {
+  const top = Object.entries(STREAMS.names).filter(([n]) => n !== "無名溪流").slice(0, 4).map(([n]) => n).join("、");
+  $("streamHint").textContent = `${top || "無名溪流"}等 OSM 明渠溪流（堤內 ${STREAMS.cells.length} 格，地圖上藍線）。水面高於河道水位時直接排入溪流、送往主河；不模擬溪流本身的容量與溢流。`;
+  $("streamOn").addEventListener("change", e => { P.streams = e.target.checked; activePreset = null; syncControls(); recompute(); });
+} else { $("streamCtl").hidden = true; document.querySelectorAll(".stream-leg").forEach(e => e.remove()); }
 bindContourHover(); renderRampLegend(); if (typeof bindSweep === "function") bindSweep(); init3D();
 $("showBld").addEventListener("change", e => { if (T3.bld) T3.bld.visible = e.target.checked; });
 $("ex").addEventListener("input", e => { T3.ex = Number(e.target.value); $("exOut").textContent = T3.ex + "×"; applyHeights(); });

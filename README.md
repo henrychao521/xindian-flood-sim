@@ -22,6 +22,8 @@
 ```sh
 python3 scripts/mosaic.py                 # 全市 20 m DEM（需 data/raw/taipei_20mDEM_2025.zip）
 python3 scripts/build_region.py <id>      # 依 regions/<id>.json 產生 data/processed/<id>/（會從 OSM API 下載資料）
+python3 scripts/fetch_streams.py [id …]   # 山區明渠溪流（OSM Overpass）→ work/streams/
+python3 scripts/build_streams.py [id …]   # 溪流畫進 20 m 網格 → data/processed/<id>/streams.json
 python3 src/make_region_template.py       # 新店溪模板 → 通用河段模板
 python3 src/build.py                      # 新店溪 → index.html
 python3 src/build.py --region <id>        # 河段 → <id>/index.html
@@ -61,7 +63,7 @@ python3 scripts/sweep_table.py                           # 結果表（docs/STAG
 - 河道水位縱斷面與各河段疏散門開關情境（新店溪：華江、華中、馬場町、古亭、景福）
 - 內政部 20 m 實測 DEM 地形、等高線與 3D 建物（臺北市 3D 近似建物模型）；地形底圖（暈渲、環境遮蔽、建物落影）與總覽封面由 Blender 依同一份資料算出
 - 二維局部慣性淺水波水流（Bates et al., 2010），建物以孔隙率法處理
-- 雨水下水道（78.8 mm/hr）與抽水站（45–60 mm/hr）排水模型
+- 雨水下水道（78.8 mm/hr）與抽水站（45–60 mm/hr）排水模型；山區明渠溪流（磺溪、內溝溪、外雙溪等，OSM）在水面高於河道水位時把水排入主河
 - OpenStreetMap 道路、橋樑、公共設施淹水狀態
 - 疏散門位置以臺北市水利處疏散門清單（data.taipei）為準，OSM 補足
 - GPU 情境集合（`scripts/flow_torch.py`，二維水流的 PyTorch 移植，在 Colab 批次計算）：128 個降雨強度×延時×排水情境，以及洪水規模×潮位×水門失效組合；每頁有強度–面積與洪水規模–面積曲線、淹水門檻圖（多大的雨會淹到這裡）、淹水機率、最大水深包絡與各水門失效包絡圖層

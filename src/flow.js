@@ -18,7 +18,9 @@ function flowWorkerMain() {
     // 每座水門入口與抽水站：入口格周邊 5×5 的堤內格
     const near = k0 => { const out = [], i0 = k0 % nx, j0 = (k0 / nx) | 0; for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const i = i0 + a, j = j0 + b; if (i >= 0 && j >= 0 && i < nx && j < ny && act[j * nx + i]) out.push(j * nx + i); } return out; };
     const gateCells = P.gates.map(gt => near(gt.entry));
-    const out = { h: [], u: [], v: [], q: [], sew: [] };
+    const out = { h: [], u: [], v: [], q: [], sew: [], str: [] };
+    // 山區溪流（OSM 明渠）：溪流格的水面高於河道水位時，水直接排入溪流、送往主河（不模擬溪流本身的容量與溢流）
+    const strCells = P.streamOn && P.stream ? P.stream : []; let strAcc = 0;
     const nC = P.nCatch, cArea = new Float64Array(nC), dem = new Float64Array(nC), fac = new Float64Array(nC), sew = new Float64Array(nC), sewAcc = new Float64Array(nC);
     for (let k = 0; k < N; k++) if (P.catch[k] >= 0) cArea[P.catch[k]] += A;
     const cStore = Array.from(cArea, a => Math.max(1, a * P.storeMM / 1000));
@@ -31,7 +33,7 @@ function flowWorkerMain() {
         uu[k] = 0.5 * (qx[j * (nx + 1) + i] + qx[j * (nx + 1) + i + 1]) / hd;
         vv[k] = 0.5 * (qy[j * nx + i] + qy[(j + 1) * nx + i]) / hd;
       }
-      out.h.push(hh); out.u.push(uu); out.v.push(vv); out.q.push(tAcc > 0 ? qAcc.map(v => v / tAcc) : qLast.slice()); out.sew.push(Array.from(sewAcc)); qAcc.fill(0); tAcc = 0;
+      out.h.push(hh); out.u.push(uu); out.v.push(vv); out.q.push(tAcc > 0 ? qAcc.map(v => v / tAcc) : qLast.slice()); out.sew.push(Array.from(sewAcc)); out.str.push(tAcc > 0 ? strAcc / tAcc : 0); strAcc = 0; qAcc.fill(0); tAcc = 0;
       postMessage({ type: "progress", p: t / T });
     };
     while (t <= T + 1e-6) {
@@ -93,6 +95,7 @@ function flowWorkerMain() {
         for (let k = 0; k < N; k++) { const c = P.catch[k]; if (c >= 0 && h[k] > 0 && fac[c] > 0) h[k] = Math.max(0, h[k] - Math.min(h[k] * psi[k] * A, intake) * fac[c] / (A * psi[k])); }
         for (let c = 0; c < nC; c++) sewAcc[c] = sew[c] / cStore[c];
       }
+      if (strCells.length) { const zr = interp(P.zrOut, t); for (let n = 0; n < strCells.length; n++) { const k = strCells[n]; if (h[k] > 0 && z[k] + h[k] > zr) { strAcc += h[k] * psi[k] * A; h[k] = 0; } } }
       // 水門入流（含潛沒與回流）、越堤、抽水
       P.gates.forEach((gt, gi) => {
         const cells = gateCells[gi]; if (!cells.length) return;
@@ -139,6 +142,7 @@ function runFlow() {
     rain: frames.map(f => f.rain), C: P.C, openPct: P.openPct, closeAt: P.closeAt,
     sewerMM: P.sewerMM, pumpMM: P.pumpMM, avail: P.avail, storeMM: SEWER_STORE_MM, gravityEL: GRAVITY_EL,
     zrOut: frames.map(f => f.Z[GATES[REGION.keyGate].node]), catch: DRAIN.catch, nCatch: DRAIN.stations.length,
+    stream: STREAMS.cells, streamOn: P.streams !== false,
     gates: gateIds.map((id, gi) => {
       const g = GATES[gi];
       return { entry: DEM.entry[id], sill: g.sill, width: g.width, levee: NODES[g.node].levee, open: !!P.gateOpen[id], zr: frames.map(f => f.Z[g.node]) };
@@ -153,7 +157,8 @@ function updateFlowStatus() {
   const fr = FLOW.result, k = Math.min(tIdx, fr.h.length - 1), q = fr.q[k];
   let vmax = 0; const u = fr.u[k], v = fr.v[k]; for (let i = 0; i < u.length; i++) { const s = Math.hypot(u[i], v[i]); if (s > vmax) vmax = s; }
   const names = GATES.map(g => g.name.replace(/門$/, ""));
-  el.innerHTML = `二維水流：水門入流 ${q.map((v, i) => `${names[i]} <b class="num">${fmt(v, 0)}</b>`).join("・")} m³/s・堤內最大流速 <b class="num">${fmt(vmax, 1)}</b> m/s`;
+  const sq = fr.str ? fr.str[k] : 0;
+  el.innerHTML = `二維水流：水門入流 ${q.map((v, i) => `${names[i]} <b class="num">${fmt(v, 0)}</b>`).join("・")} m³/s・堤內最大流速 <b class="num">${fmt(vmax, 1)}</b> m/s` + (STREAMS.cells.length && P.streams !== false ? `・山區溪流排出 <b class="num">${fmt(sq, 1)}</b> m³/s` : "");
 }
 // 堤內各格水深：二維結果優先，未完成時用靜水面
 function inlandDepth(fr) {

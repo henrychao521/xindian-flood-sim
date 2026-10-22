@@ -74,6 +74,7 @@ rid_ = region or "xindian"; lk = json.loads(r(sd / "look.json")) if (sd / "look.
 if lk and (ROOT / "tex" / f"{rid_}.jpg").exists():
     lk["tex"] = f"tex/{rid_}.jpg" if (not region or "--local-three" in sys.argv) else f"../tex/{rid_}.jpg"  # 測試頁在 work/checks（有 tex 連結）
 data += "const LOOK=" + (json.dumps(lk, ensure_ascii=False) if lk else "null") + ";\n"
+data += "const STREAM_DATA=" + (r(sd / "streams.json") if (sd / "streams.json").exists() else "null") + ";\n"
 data += "const DISP_DATA=" + (r(sd / "disp.json") if (sd / "disp.json").exists() else "null") + ";\n"
 for a, b in [("//@@DEMDATA@@", data), ("//@@SWEEP@@", r(S / "sweep.js")), ("//@@REGIONDATA@@", regiondata), ("//@@ENGINE@@", r(S / "engine.js")), ("//@@TERRAIN@@", r(S / "terrain.js")), ("//@@FLOW@@", r(S / "flow.js") + "\n" + r(S / "osm.js"))]:
     assert a in src, a
