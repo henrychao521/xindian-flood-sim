@@ -351,6 +351,14 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <div class="info-line" id="riverNow"></div>
           <div class="hint">每條線是一座水門未關（或全關、全部未關）時，洪水規模從小到大的尖峰淹水面積；河道水位用頁面同一套水位模型（洪峰時段 T+2–4 h 與潮位同步），背景雨 40 mm/h × 2 h，排水設計值。虛線「全關」只剩越堤。地圖可疊「水門失效包絡」看每座水門失效時水往哪裡去。</div>
         </div>
+        <div id="closureBox" style="display:grid;gap:14px;border-top:1px solid var(--line);padding-top:14px" hidden>
+          <div class="chart-head"><h3 style="margin:0;font-size:14px">搶險封堵越快，少淹多少？</h3><span class="hint" id="closureMeta"></span></div>
+          <svg id="closureChart" role="img" aria-label="水門失效後封堵時間與尖峰淹水面積"></svg>
+          <div class="legend" id="closureLegend"></div>
+          <div class="info-line" id="closureNow"></div>
+          <div class="table-wrap"><table><thead><tr><th>兩座水門同時失效（最嚴重的五組，計畫洪峰 100%、潮位 1.6 m）</th><th class="r">尖峰淹水 ha</th><th class="r">各自單獨失效 ha</th><th>兩者關係</th></tr></thead><tbody id="pairBody"></tbody></table></div>
+          <div class="hint">封堵時刻從模擬開始（洪水上漲前約 2 小時）起算；封堵後水門不再進水，越堤照算。兩座門同時失效時，若進水流到同一片低地，面積幾乎只等於較嚴重的那一座。</div>
+        </div>
       </section>
       <section class="panel" id="nariPanel" hidden>
         <div class="chart-head"><h2>納莉颱風紀錄對照（2001/9/16–17）</h2><span class="hint">16 小時內的最大水深</span></div>
@@ -358,10 +366,11 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         <div class="info-line" id="nariMeta"></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>紀錄地點（水利署報告表 5）</th><th class="r">紀錄水深</th><th class="r">模型最大水深 中位數／90%</th><th class="r">≥ 0.3 m 路段／路段總長</th><th>比對</th></tr></thead>
+            <thead><tr><th>紀錄地點（水利署報告表 5）</th><th class="r">紀錄水深</th><th class="r">模型最大水深 中位數／90%</th><th class="r">≥ 0.3 m 路段／路段總長</th><th>比對</th><th class="r">全市合併（跨河段）</th></tr></thead>
             <tbody id="nariBody"></tbody>
           </table>
         </div>
+        <div class="info-line" id="nariCityNote"></div>
         <div class="hint" id="nariNotes"></div>
         <div class="hint">比對方式：找範圍內名稱以紀錄路名開頭的道路，取每段道路所在 20 m 格在 16 小時內的最大水深。紀錄是「該區域的積水深度」，道路只是代表位置；20 m 網格與集總式下水道抓不到街道尺度的差異，請看量級與有沒有淹，不要看到公分。</div>
       </section>
@@ -522,6 +531,7 @@ function recompute() {
   render();
   if (typeof renderSweepPanel === "function") renderSweepPanel();
   if (typeof renderRiverPanel === "function") renderRiverPanel();
+  if (typeof renderClosurePanel === "function") renderClosurePanel();
   clearTimeout(recompute.t); recompute.t = setTimeout(runFlow, 250);
 }
 

@@ -69,11 +69,19 @@ if (sd / "river.json").exists():
     if (sd / "river_maps.json").exists(): rv["maps"] = json.loads(r(sd / "river_maps.json"))
     river = json.dumps(rv, ensure_ascii=False, separators=(",", ":"))
 data += "const RIVER_DATA=" + river + ";\n"
+cl = sd / "closure.json"  # 搶險封堵時間與兩座水門同時失效（scripts/flow_torch.py closure）
+data += "const CLOSURE_DATA=" + (r(cl) if cl.exists() else "null") + ";\n"
 # 地形色階、顯示高程、Blender 底圖（scripts/look.py、display_dem.py、blender_terrain.py＋compose_texture.py）
 rid_ = region or "xindian"; lk = json.loads(r(sd / "look.json")) if (sd / "look.json").exists() else None
 if lk and (ROOT / "tex" / f"{rid_}.jpg").exists():
     lk["tex"] = f"tex/{rid_}.jpg" if (not region or "--local-three" in sys.argv) else f"../tex/{rid_}.jpg"  # 測試頁在 work/checks（有 tex 連結）
 data += "const LOOK=" + (json.dumps(lk, ensure_ascii=False) if lk else "null") + ";\n"
+cityf = D / "city" / "nari_city.json"  # 全市合併網格（scripts/merge_city.py）：本河段在封閉／打開河段邊界時的結果
+nc = None
+if cityf.exists():
+    cj = json.loads(r(cityf)); rr = region or "xindian"
+    nc = {"closed": cj["runs"]["closed"]["regions"][rr], "open": cj["runs"]["open"]["regions"][rr], "extra_ha": cj["extra_ha_by_region"][rr], "seconds": cj["runs"]["open"]["seconds"], "device": cj["device"]}
+data += "const NARI_CITY=" + (json.dumps(nc, ensure_ascii=False) if nc else "null") + ";\n"
 data += "const NARI_DATA=" + (r(sd / "nari.json") if (sd / "nari.json").exists() else "null") + ";\n"
 data += "const STREAM_DATA=" + (r(sd / "streams.json") if (sd / "streams.json").exists() else "null") + ";\n"
 data += "const DISP_DATA=" + (r(sd / "disp.json") if (sd / "disp.json").exists() else "null") + ";\n"

@@ -1,0 +1,544 @@
+{
+ "preset": "nari",
+ "grid": [
+  930,
+  1050
+ ],
+ "inland_ha": 15276.76,
+ "device": "mps",
+ "runs": {
+  "closed": {
+   "seconds": 180,
+   "steps": 47790,
+   "max_area_ha": 1166.4,
+   "regions": {
+    "xindian": {
+     "max_env_ha": 0.0,
+     "deep_env_ha": 0.0,
+     "browser_env_ha": 0.0,
+     "records": [
+      {
+       "district": "萬華區",
+       "where": "成都路、昆明街、峨嵋街一帶",
+       "depth": "1.0 m",
+       "segs": 89,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "tamsui": {
+     "max_env_ha": 0.0,
+     "deep_env_ha": 0.0,
+     "browser_env_ha": 0.0,
+     "records": [
+      {
+       "district": "中山區",
+       "where": "新生北路（基隆河至南京東路）兩側",
+       "depth": "1.2 m",
+       "segs": 745,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "萬華區",
+       "where": "成都路、昆明街、峨嵋街一帶",
+       "depth": "1.0 m",
+       "segs": 229,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "shilin": {
+     "max_env_ha": 32.6,
+     "deep_env_ha": 6.0,
+     "browser_env_ha": 33.5,
+     "records": [
+      {
+       "district": "士林區",
+       "where": "忠誠路、德行東路、雙溪街一帶",
+       "depth": "1.0 m",
+       "segs": 903,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "zhongshan": {
+     "max_env_ha": 393.8,
+     "deep_env_ha": 122.8,
+     "browser_env_ha": 355.1,
+     "records": [
+      {
+       "district": "內湖區",
+       "where": "環山路、港墘路、金龍路、成功路三段、內湖路二、三段",
+       "depth": "1.2 m",
+       "segs": 1792,
+       "med": 0.01,
+       "p90": 0.07,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "中山區",
+       "where": "北安路、明水路、大直街一帶",
+       "depth": "2.0–2.8 m",
+       "segs": 1589,
+       "med": 0.14,
+       "p90": 0.94,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "中山區",
+       "where": "濱江果菜市場周邊、龍江路西側",
+       "depth": "1–1.5 m",
+       "segs": 1055,
+       "med": 0.02,
+       "p90": 0.55,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "松山區",
+       "where": "松山機場近大直橋",
+       "depth": "1.2 m",
+       "segs": 839,
+       "med": 0.08,
+       "p90": 0.49,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "中山區",
+       "where": "南京東路以北、復興北路以西、建國北路以東",
+       "depth": "1.0–1.6 m",
+       "segs": 1255,
+       "med": 0.01,
+       "p90": 0.27,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "中山區",
+       "where": "新生北路（基隆河至南京東路）兩側",
+       "depth": "1.2 m",
+       "segs": 555,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "松山區",
+       "where": "松河路自南京東路至三張犁",
+       "depth": "1–1.8 m",
+       "segs": 171,
+       "med": 0.01,
+       "p90": 0.39,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "松山區",
+       "where": "松山火車站以西、光復北路以東、市民大道以北、南京東路以南",
+       "depth": "1–2 m",
+       "segs": 456,
+       "med": 0.0,
+       "p90": 0.06,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "neihu": {
+     "max_env_ha": 828.9,
+     "deep_env_ha": 628.6,
+     "browser_env_ha": 894.4,
+     "records": [
+      {
+       "district": "南港區",
+       "where": "大坑、四分溪（南港路以南）",
+       "depth": "1.5–3 m",
+       "segs": 1033,
+       "med": 0.4,
+       "p90": 1.35,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "南港區",
+       "where": "大坑溪以西、忠孝東路七段以北、向陽路以東、基隆路以南",
+       "depth": "1.5–3 m",
+       "segs": 492,
+       "med": 0.95,
+       "p90": 1.87,
+       "verdict": "量級相符"
+      },
+      {
+       "district": "南港區",
+       "where": "向陽路以西、中坡南北路以東、東新街以北",
+       "depth": "1–1.8 m",
+       "segs": 255,
+       "med": 0.58,
+       "p90": 1.34,
+       "verdict": "量級相符"
+      },
+      {
+       "district": "內湖區",
+       "where": "東湖路、康寧路三段、南湖大橋北側",
+       "depth": "1.2 m",
+       "segs": 1015,
+       "med": 0.07,
+       "p90": 2.93,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "內湖區",
+       "where": "康樂街",
+       "depth": "1.2 m",
+       "segs": 299,
+       "med": 0.95,
+       "p90": 1.97,
+       "verdict": "量級相符"
+      },
+      {
+       "district": "內湖區",
+       "where": "大湖山莊街",
+       "depth": "1.2 m",
+       "segs": 0,
+       "med": null,
+       "p90": null,
+       "verdict": "範圍內沒有這些路名"
+      },
+      {
+       "district": "內湖區",
+       "where": "環山路、港墘路、金龍路、成功路三段、內湖路二、三段",
+       "depth": "1.2 m",
+       "segs": 363,
+       "med": 0.06,
+       "p90": 0.08,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "jingmei": {
+     "max_env_ha": 343.0,
+     "deep_env_ha": 152.7,
+     "browser_env_ha": 351.0,
+     "records": [
+      {
+       "district": "文山區",
+       "where": "木柵路四、五段",
+       "depth": "1.5 m",
+       "segs": 577,
+       "med": 0.01,
+       "p90": 4.18,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "文山區",
+       "where": "老泉街一帶",
+       "depth": "1.5 m",
+       "segs": 449,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "文山區",
+       "where": "新光路三段",
+       "depth": "1.0 m",
+       "segs": 0,
+       "med": null,
+       "p90": null,
+       "verdict": "範圍內沒有這些路名"
+      },
+      {
+       "district": "文山區",
+       "where": "北政國中（指南路三段）",
+       "depth": "1.5 m",
+       "segs": 947,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "beitou": {
+     "max_env_ha": 0.0,
+     "deep_env_ha": 0.0,
+     "browser_env_ha": 0.0,
+     "records": []
+    }
+   }
+  },
+  "open": {
+   "seconds": 179,
+   "steps": 47793,
+   "max_area_ha": 1468.6,
+   "regions": {
+    "xindian": {
+     "max_env_ha": 0.0,
+     "deep_env_ha": 0.0,
+     "browser_env_ha": 0.0,
+     "records": [
+      {
+       "district": "萬華區",
+       "where": "成都路、昆明街、峨嵋街一帶",
+       "depth": "1.0 m",
+       "segs": 89,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "tamsui": {
+     "max_env_ha": 0.0,
+     "deep_env_ha": 0.0,
+     "browser_env_ha": 0.0,
+     "records": [
+      {
+       "district": "中山區",
+       "where": "新生北路（基隆河至南京東路）兩側",
+       "depth": "1.2 m",
+       "segs": 745,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "萬華區",
+       "where": "成都路、昆明街、峨嵋街一帶",
+       "depth": "1.0 m",
+       "segs": 229,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "shilin": {
+     "max_env_ha": 33.1,
+     "deep_env_ha": 6.0,
+     "browser_env_ha": 33.5,
+     "records": [
+      {
+       "district": "士林區",
+       "where": "忠誠路、德行東路、雙溪街一帶",
+       "depth": "1.0 m",
+       "segs": 903,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "zhongshan": {
+     "max_env_ha": 871.5,
+     "deep_env_ha": 583.8,
+     "browser_env_ha": 355.1,
+     "records": [
+      {
+       "district": "內湖區",
+       "where": "環山路、港墘路、金龍路、成功路三段、內湖路二、三段",
+       "depth": "1.2 m",
+       "segs": 1792,
+       "med": 0.02,
+       "p90": 0.93,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "中山區",
+       "where": "北安路、明水路、大直街一帶",
+       "depth": "2.0–2.8 m",
+       "segs": 1589,
+       "med": 0.33,
+       "p90": 1.73,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "中山區",
+       "where": "濱江果菜市場周邊、龍江路西側",
+       "depth": "1–1.5 m",
+       "segs": 1055,
+       "med": 0.02,
+       "p90": 0.55,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "松山區",
+       "where": "松山機場近大直橋",
+       "depth": "1.2 m",
+       "segs": 839,
+       "med": 0.08,
+       "p90": 0.49,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "中山區",
+       "where": "南京東路以北、復興北路以西、建國北路以東",
+       "depth": "1.0–1.6 m",
+       "segs": 1255,
+       "med": 0.01,
+       "p90": 0.27,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "中山區",
+       "where": "新生北路（基隆河至南京東路）兩側",
+       "depth": "1.2 m",
+       "segs": 555,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "松山區",
+       "where": "松河路自南京東路至三張犁",
+       "depth": "1–1.8 m",
+       "segs": 171,
+       "med": 0.04,
+       "p90": 1.83,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "松山區",
+       "where": "松山火車站以西、光復北路以東、市民大道以北、南京東路以南",
+       "depth": "1–2 m",
+       "segs": 456,
+       "med": 0.0,
+       "p90": 0.06,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "neihu": {
+     "max_env_ha": 712.2,
+     "deep_env_ha": 445.0,
+     "browser_env_ha": 894.4,
+     "records": [
+      {
+       "district": "南港區",
+       "where": "大坑、四分溪（南港路以南）",
+       "depth": "1.5–3 m",
+       "segs": 1033,
+       "med": 0.29,
+       "p90": 0.94,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "南港區",
+       "where": "大坑溪以西、忠孝東路七段以北、向陽路以東、基隆路以南",
+       "depth": "1.5–3 m",
+       "segs": 492,
+       "med": 0.29,
+       "p90": 1.01,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "南港區",
+       "where": "向陽路以西、中坡南北路以東、東新街以北",
+       "depth": "1–1.8 m",
+       "segs": 255,
+       "med": 0.21,
+       "p90": 0.7,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "內湖區",
+       "where": "東湖路、康寧路三段、南湖大橋北側",
+       "depth": "1.2 m",
+       "segs": 1015,
+       "med": 0.07,
+       "p90": 2.93,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "內湖區",
+       "where": "康樂街",
+       "depth": "1.2 m",
+       "segs": 299,
+       "med": 0.95,
+       "p90": 1.97,
+       "verdict": "量級相符"
+      },
+      {
+       "district": "內湖區",
+       "where": "大湖山莊街",
+       "depth": "1.2 m",
+       "segs": 0,
+       "med": null,
+       "p90": null,
+       "verdict": "範圍內沒有這些路名"
+      },
+      {
+       "district": "內湖區",
+       "where": "環山路、港墘路、金龍路、成功路三段、內湖路二、三段",
+       "depth": "1.2 m",
+       "segs": 363,
+       "med": 0.05,
+       "p90": 0.11,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "jingmei": {
+     "max_env_ha": 343.0,
+     "deep_env_ha": 152.7,
+     "browser_env_ha": 351.0,
+     "records": [
+      {
+       "district": "文山區",
+       "where": "木柵路四、五段",
+       "depth": "1.5 m",
+       "segs": 577,
+       "med": 0.01,
+       "p90": 4.18,
+       "verdict": "有淹、偏淺"
+      },
+      {
+       "district": "文山區",
+       "where": "老泉街一帶",
+       "depth": "1.5 m",
+       "segs": 449,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      },
+      {
+       "district": "文山區",
+       "where": "新光路三段",
+       "depth": "1.0 m",
+       "segs": 0,
+       "med": null,
+       "p90": null,
+       "verdict": "範圍內沒有這些路名"
+      },
+      {
+       "district": "文山區",
+       "where": "北政國中（指南路三段）",
+       "depth": "1.5 m",
+       "segs": 947,
+       "med": 0.0,
+       "p90": 0.0,
+       "verdict": "模型幾乎沒淹"
+      }
+     ]
+    },
+    "beitou": {
+     "max_env_ha": 0.0,
+     "deep_env_ha": 0.0,
+     "browser_env_ha": 0.0,
+     "records": []
+    }
+   }
+  }
+ },
+ "extra_ha_by_region": {
+  "xindian": 0.0,
+  "tamsui": 0.0,
+  "shilin": 0.4,
+  "zhongshan": 478.6,
+  "neihu": 0.0,
+  "jingmei": 0.0,
+  "beitou": 0.0
+ }
+}

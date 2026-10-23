@@ -44,11 +44,14 @@ function renderNari() {
   txt(svg, box.l + 2, box.t + 8, "mm/h", {});
   $("nariMeta").innerHTML = `雨量站：${NARI.stations.join("、")}（16 小時共 <b class="num">${NARI.rain_total}</b> mm，最大時雨量 <b class="num">${NARI.rain_max}</b> mm）・河道：${NARI.Qnote}，換算${REGION.qDesign ? `計畫洪峰 <b class="num">${NARI.Qpeak}%</b>` : ` <b class="num">${NARI.Qpeak.toLocaleString("zh-TW")}</b> m³/s`}` +
     (NARI.pumpFail.length ? `・抽水站失效：${NARI.pumpFail.map(f => `${f.name.replace("抽水站", "")}（${hhmm(f.at)}${f.note.includes("假設") ? "，時間未載、假設" : "，" + f.note}）`).join("、")}` : "");
+  const city = typeof NARI_CITY !== "undefined" && NARI_CITY ? NARI_CITY : null;
+  const cityCell = i => { const c = city && city.open.records[i]; if (!c) return "<td>—</td>"; const cls = { "量級相符": "ok", "有淹、偏淺": "watch", "模型偏深": "warn", "模型幾乎沒淹": "danger" }[c.verdict] || ""; return `<td class="r num">${c.med === null ? "—" : `${fmt(c.med)}／${fmt(c.p90)} m`}<small><span class="pill ${cls}">${c.verdict}</span></small></td>`; };
+  $("nariCityNote").innerHTML = city ? `<b>全市合併計算</b>：把七個河段拼回同一張 20 m 網格、打開河段之間的邊界（GPU 版，${city.seconds} 秒），讓越堤的水能流到相鄰河段。本河段最大淹水 <b class="num">${fmt(city.open.max_env_ha, 0)}</b> 公頃（邊界封閉時 ${fmt(city.closed.max_env_ha, 0)} 公頃）${city.extra_ha > 0.5 ? `，多淹的 <b class="num">${fmt(city.extra_ha, 0)}</b> 公頃是從相鄰河段流進來的水` : city.open.max_env_ha < city.closed.max_env_ha - 5 ? "，有一部分水流到相鄰河段" : ""}。` : "";
   const st = nariRecordStats(), body = $("nariBody");
-  if (!st) { body.innerHTML = `<tr><td colspan="5" class="hint">二維水流計算完成後，這裡會比對水利署報告表 5 的淹水地點。</td></tr>`; }
-  else body.innerHTML = st.map(r => {
+  if (!st) { body.innerHTML = `<tr><td colspan="6" class="hint">二維水流計算完成後，這裡會比對水利署報告表 5 的淹水地點。</td></tr>`; }
+  else body.innerHTML = st.map((r, i) => {
     const verdict = nariVerdict(r), cls = { "量級相符": "ok", "有淹、偏淺": "watch", "模型偏深": "warn", "模型幾乎沒淹": "danger" }[verdict] || "";
-    return `<tr><td><b>${r.district}</b><small>${r.where}</small></td><td class="r num">${r.depth}</td><td class="r num">${r.med === null ? "—" : `${fmt(r.med)}／${fmt(r.p90)} m`}</td><td class="r num">${r.n ? `${fmt(r.wetKm, 1)}／${fmt(r.km, 1)} km` : "—"}</td><td><span class="pill ${cls}">${verdict}</span></td></tr>`;
+    return `<tr><td><b>${r.district}</b><small>${r.where}</small></td><td class="r num">${r.depth}</td><td class="r num">${r.med === null ? "—" : `${fmt(r.med)}／${fmt(r.p90)} m`}</td><td class="r num">${r.n ? `${fmt(r.wetKm, 1)}／${fmt(r.km, 1)} km` : "—"}</td><td><span class="pill ${cls}">${verdict}</span></td>${cityCell(i)}</tr>`;
   }).join("");
   $("nariNotes").innerHTML = "<b>資料來源</b>：" + NARI.sources.join("；") + "。<b>假設</b>：" + NARI.assumptions.join("；") + "。";
 }

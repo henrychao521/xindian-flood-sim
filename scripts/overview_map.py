@@ -105,6 +105,12 @@ for r in regs:
     if rv:
         q5 = rv["overtop_label"].split("＋")[0]
         foot.append(f'洪峰 {q5}＋暴潮、水門全關：' + (f'越堤淹 <b class="num">{fmt_ha(rv["overtop"])}</b> ha' if rv["overtop"] >= 1 else '河水仍低於堤頂，不越堤'))
+    cf_ = ROOT / f"data/processed/{rid}/closure.json"  # 搶險封堵時間（scripts/flow_torch.py closure）
+    if cf_.exists():
+        cl = json.loads(cf_.read_text(encoding="utf-8")); Q0 = min(x["Qpeak"] for x in cl["scenarios"] if x["kind"] == "close")
+        kk = {x["closeAt"]: x["area_peak"] for x in cl["scenarios"] if x["kind"] == "close" and x["gates"] == "key" and x["Qpeak"] == Q0}
+        if kk.get(99, 0) >= 5:
+            foot.append(f'{esc(cl["gateNames"][cl["keyGate"]])}未關：1 小時內封堵尖峰淹水 <b class="num">{kk[1]:.0f}</b> ha、沒封堵 <b class="num">{kk[99]:.0f}</b> ha（少淹 <b class="num">{(1 - kk[1] / kk[99]) * 100:.0f}%</b>）')
     nf = ROOT / f"data/processed/{rid}/nari_results.json"
     if nf.exists():
         nr = json.loads(nf.read_text(encoding="utf-8")); good = sum(x["verdict"] == "量級相符" for x in nr["records"]); tot = sum(x["verdict"] != "範圍內沒有這些路名" for x in nr["records"])
@@ -141,6 +147,44 @@ gate_more = [n for n, _, a, b, *_ in chart_rows if a > b]; gate_zero = [n for n,
 chart_note = ("、".join(gate_more) + ("是唯一" if len(gate_more) == 1 else "是") + "水門失效比 130 mm/h 暴雨淹得多的河段" if gate_more else "各河段都是 130 mm/h 暴雨淹得比水門失效多") + "；" \
              + ("、".join(gate_zero) + "的水門底檻高於這個洪水位，水門未關也不進水，主要風險是大雨；" if gate_zero else "") \
              + "130 mm/h 的面積模型普遍高估，絕對值請看下方說明。"
+# ---- 納莉颱風全市合併計算（scripts/merge_city.py）----
+nari_city_html = ""
+ncf = ROOT / "data/processed/city/nari_city.json"
+if ncf.exists() and (OUT / "img/nari_city.png").exists():
+    nc = json.loads(ncf.read_text(encoding="utf-8")); NAMES = {r["id"]: r["title"].split("（")[0] for r in regs}
+    rows_ = []
+    for rid_, v in nc["runs"]["open"]["regions"].items():
+        c = nc["runs"]["closed"]["regions"][rid_]; ok_c = sum(x["verdict"] == "量級相符" for x in c["records"]); ok_o = sum(x["verdict"] == "量級相符" for x in v["records"])
+        wet_c = sum(x["verdict"] in ("量級相符", "有淹、偏淺", "模型偏深") for x in c["records"]); wet_o = sum(x["verdict"] in ("量級相符", "有淹、偏淺", "模型偏深") for x in v["records"])
+        nrec = sum(x["verdict"] != "範圍內沒有這些路名" for x in v["records"])
+        rows_.append(f'<tr><td>{esc(NAMES.get(rid_, rid_))}</td><td class="r num">{c["max_env_ha"]:,.0f}</td><td class="r num">{v["max_env_ha"]:,.0f}</td><td class="r num">{nrec}</td><td class="r num">{wet_c}／{wet_o}</td><td class="r num">{ok_c}／{ok_o}</td></tr>')
+    stream_html = ""
+    scf = ROOT / "data/processed/city/nari_streamcap.json"
+    if scf.exists():
+        sc = json.loads(scf.read_text(encoding="utf-8")); LB = {"no_upstream": "沒有範圍外來水（基準）", "land_only": "只有山坡逕流（上限）"}
+        cols = ["shilin", "zhongshan", "neihu", "jingmei", "beitou"]
+        body = []
+        for run in sc["runs"]:
+            lab = LB.get(run["label"]) or ("溪流來水・排洪能力不限" if run["cap"] is None else f'溪流來水・每條溪 {run["cap"]} m³/s')
+            sh = run["regions"]["shilin"]["records"][0] if run["regions"]["shilin"]["records"] else None
+            body.append(f'<tr><td>{lab}</td>' + "".join(f'<td class="r num">{run["regions"][c]["max_env_ha"]:,.0f}</td>' for c in cols) + f'<td>{sh["verdict"] if sh else "—"}</td></tr>')
+        up = sc.get("upstream") or {}
+        stream_html = (f'<h3 style="font-size:14px;margin:8px 0 2px">範圍外來水與溪流排洪能力</h3><p class="hint">模擬範圍外還有 {up.get("area_km2", 0):.0f} km² 的山坡（陽明山、南港山區等）會流進市區。以 D8 流向找出入口，合理化公式（C = 0.7）配最近山區雨量站的逐時雨量估算流量：靠近溪流的灌進溪流、沿溪往下游累加，超過排洪能力的部分溢到地面；不靠近溪流的直接流到入口格（集中在一格，偏高，當上限看）。各溪流的實際排洪能力沒有公開資料，所以掃描幾個值。</p>'
+                       f'<div class="table-wrap"><table class="nc"><thead><tr><th>情境（最大淹水 ha）</th><th class="r">士林</th><th class="r">中山</th><th class="r">內湖</th><th class="r">景美溪</th><th class="r">北投</th><th>士林忠誠路、德行東路（紀錄 1.0 m）</th></tr></thead><tbody>{"".join(body)}</tbody></table></div>')
+    nari_city_html = f'''  <section class="panel nari-city" aria-labelledby="ncH">
+    <h2 id="ncH">納莉颱風（2001/9/16 19:00–9/17 11:00）：全市合併計算</h2>
+    <p class="hint">七個河段拼回同一張 20 m 網格、打開河段之間的邊界，讓內湖、南港越堤的水能往西流進松山、中山。雨量用各區氣象署測站實測值，河道水位依觀測峰值反推，抽水站依紀錄時刻失效。GPU 版計算 {nc["runs"]["open"]["seconds"]} 秒。</p>
+    <div class="nc-grid">
+      <div class="map nc-map"><img src="map.jpg" width="{w}" height="{h}" alt="臺北市地形"><img class="ov" src="img/nari_city.png" width="{w}" height="{h}" alt="納莉颱風全市合併計算的最大水深"></div>
+      <div>
+        <div class="legend"><span><i style="background:rgb(120,170,230)"></i>0.1–0.5 m</span><span><i style="background:rgb(40,110,200)"></i>0.5–1 m</span><span><i style="background:rgb(20,60,160)"></i>1–2 m</span><span><i style="background:rgb(60,20,120)"></i>≥ 2 m</span></div>
+        <div class="table-wrap"><table class="nc"><thead><tr><th>河段</th><th class="r">最大淹水 ha（邊界封閉）</th><th class="r">打開邊界</th><th class="r">紀錄地點</th><th class="r">模型有淹 封閉／打開</th><th class="r">量級相符 封閉／打開</th></tr></thead><tbody>{"".join(rows_)}</tbody></table></div>
+        {stream_html}
+        <p class="hint">打開邊界後，中山河段多淹 {nc["extra_ha_by_region"].get("zhongshan", 0):,.0f} 公頃，水來自內湖、南港越堤。中山的紀錄地點有一處從沒淹變成有淹（內湖科學園區一帶），北安路、明水路與松河路一帶水深加深；但南港變淺：模型以每座水門一段越堤代表堤防缺口，灌進來的總水量比當年少。萬華、士林、北投的紀錄淹水來自地區排水、磺溪溢堤與工地進水，本模型沒有這些機制。</p>
+      </div>
+    </div>
+  </section>
+'''
 html = f'''<!doctype html>
 <html lang="zh-Hant-TW">
 <head>
@@ -235,6 +279,14 @@ svg.cmp .bar:hover path, svg.cmp .bar:focus path {{ opacity: .8; }} svg.cmp .bar
 .foot b {{ color: var(--ink); font-weight: 500; }}
 .num {{ font-family: var(--font-data); font-variant-numeric: tabular-nums; }}
 .notes {{ color: var(--muted); font-size: 13px; }}
+.nari-city {{ display: grid; gap: 10px; }}
+.nc-grid {{ display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 18px; align-items: start; }}
+@media (max-width: 900px) {{ .nc-grid {{ grid-template-columns: minmax(0, 1fr); }} }}
+.nc-map {{ position: relative; }} .nc-map .ov {{ position: absolute; inset: 0; width: 100%; height: 100%; }}
+.table-wrap {{ overflow-x: auto; }}
+table.nc {{ width: 100%; border-collapse: collapse; font-size: 13px; min-width: 520px; }}
+table.nc th, table.nc td {{ padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }}
+table.nc th {{ font-size: 12px; color: var(--muted); font-weight: 500; }} table.nc .r {{ text-align: right; }}
 .notes ul {{ margin: 6px 0 0; padding-left: 20px; display: grid; gap: 3px; }}
 .notes b {{ color: var(--ink); }}
 footer {{ color: var(--muted); font-size: 12px; }}
@@ -261,6 +313,7 @@ footer a, .notes a {{ color: var(--accent); }}
       <p class="hint">{chart_note}</p>
     </section>
   </div>
+{nari_city_html}
   <section aria-labelledby="regH">
     <div class="section-head"><h2 id="regH">七個河段</h2><span class="hint">卡片數字都是尖峰淹水面積（公頃）；封面是 Blender 由同一份地形與建物資料算出的 3D 圖</span></div>
     <div class="cards">

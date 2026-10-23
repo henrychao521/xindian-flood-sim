@@ -80,6 +80,22 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True, closed=F
     strOn = torch.tensor([bool(s.get("streams", True)) for s in scen], device=dev)
     zStr = z.flatten()[strIdx] if strIdx.numel() else None
     strZone = torch.tensor(np.asarray(inp["zone"])[inp.get("stream", [])].astype(np.int64), device=dev) if (strIdx.numel() and inp.get("zone") is not None) else None
+    # 溪流排洪能力（溢流）：inp["streamLines"]＝每條溪流由上游到下游的格索引；scen["streamCap"]＝每條溪流的排洪能力（m³/s，None＝無限）。
+    # 每一步把各格收進的水沿溪流往下游累加，累加流量超過排洪能力後，下游的格子收不進水（水留在地面漫開）
+    SL = inp.get("streamLines"); nF = int(round(inp["simHours"] * 3600 / float(inp["frameSec"]))) + 1
+    if SL:
+        M = max(len(l) for l in SL); slIdx = torch.full((len(SL), M), -1, dtype=torch.long)
+        for li, l in enumerate(SL): slIdx[li, :len(l)] = torch.tensor(l, dtype=torch.long)
+        slIdx = slIdx.to(dev); slOk = slIdx >= 0; slI = torch.where(slOk, slIdx, torch.zeros_like(slIdx))
+        zSL = z.flatten()[slI]; psSL = (psi * A).flatten()[slI]
+        slZone = torch.tensor(np.asarray(inp["zone"]).astype(np.int64), device=dev)[slI] if inp.get("zone") is not None else None
+        capB = torch.tensor([float("inf") if s.get("streamCap") is None else float(s["streamCap"]) for s in scen], device=dev, dtype=f32)
+        # 上游入流（範圍外集水區，scripts/upstream.py）：scen["streamQin"]＝每條溪流線 × 格的流量 m³/s，從線的第一格灌入
+        qin = torch.tensor([s.get("streamQin") or [[0.0] * nF] * len(SL) for s in scen], device=dev, dtype=f32)  # (B, 溪流, nF)
+    landK = inp.get("landCells") or []
+    if landK:  # 不靠近溪流的範圍外山坡逕流，直接加到入口格
+        landI = torch.tensor(landK, device=dev, dtype=torch.long); landPs = (psi * A).flatten()[landI]
+        landQ = torch.tensor([s.get("landQin") or [[0.0] * nF] * len(landK) for s in scen], device=dev, dtype=f32)  # (B, 入口, nF)
     def weir(Cc, Bw, up, dn, crest):
         sgn = torch.where(up >= dn, 1.0, -1.0); hi = torch.maximum(up, dn); lo = torch.minimum(up, dn)
         h1 = hi - crest; h2 = torch.clamp(lo - crest, min=0)
@@ -181,7 +197,21 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True, closed=F
         facc = fac[:, cIdxv]
         hv = torch.clamp(hv - take * facc / psiA.flatten()[valid][None, :], min=0)
         hh = h.reshape(B, N).clone(); hh[:, valid] = hv
-        if zStr is not None:
+        if SL:
+            hs = hh[:, slI]                                                                 # (B, 溪流, 格)
+            zrc = interp(zrZ, t)[:, slZone] if (zoned and slZone is not None) else interp(zrOut, t)[:, None, None]
+            drn = (hs > 0) & (zSL[None] + hs > zrc) & slOk[None] & strOn[:, None, None]
+            rate = torch.where(drn, hs * psSL[None] / dt, torch.zeros_like(hs))            # 各格收進溪流的流量 m³/s
+            qup = interp(qin, t)                                                            # (B, 溪流) 上游入流
+            cum = qup[:, :, None] + torch.cumsum(rate, dim=2); prev = cum - rate
+            frac = torch.clamp((capB[:, None, None] - prev) / torch.clamp(rate, min=1e-12), min=0, max=1)
+            frac = torch.where(drn, frac, torch.zeros_like(frac))
+            newh = hs * (1 - frac)
+            hh = hh.scatter(1, slI.flatten()[None, :].expand(B, -1), torch.where(slOk[None], newh, hs).reshape(B, -1))
+            spill = torch.clamp(qup - capB[:, None], min=0)                                 # 上游來水超過排洪能力：在入口溢到地面
+            if bool((spill > 0).any()):
+                first = slI[:, 0]; hh = hh.index_add(1, first, spill * dt / psSL[None, :, 0])
+        elif zStr is not None:
             hs = hh[:, strIdx]; zrNow = interp(zrZ, t)[:, strZone] if (zoned and strZone is not None) else interp(zrOut, t)[:, None]
             dr = (hs > 0) & (zStr[None, :] + hs > zrNow) & strOn[:, None]
             hh[:, strIdx] = torch.where(dr, torch.zeros_like(hs), hs)
@@ -200,6 +230,8 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True, closed=F
             per = (Q * dt / torch.clamp(gCap[None], min=1e-9))[:, :, None].expand(-1, -1, 25) * cellOk.to(f32)[None]  # (B, nG, 25)
             hh = hh.index_add(1, flatIdx[0], per.reshape(B, -1))
             hh = torch.clamp(hh, min=0)
+        if landK:
+            hh = hh.index_add(1, landI, interp(landQ, t) * dt / landPs[None])
         h = hh.reshape(B, ny, nx)
         t += dt; step += 1
     out["hmax"] = hmaxEnv.cpu().numpy(); out["steps"] = step; out["seconds"] = time.time() - t0; out["inflow_m3"] = qAcc.cpu().numpy()

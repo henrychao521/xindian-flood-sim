@@ -167,3 +167,48 @@ function bindSweep() {
   ["sweepLayer", "sweepCase"].forEach(id => { const e = $(id); if (e) e.addEventListener("change", () => { if (frames.length) renderContour(frames[tIdx]); }); });
   ["sweepDrain", "sweepMetric"].forEach(id => { const e = $(id); if (e) e.addEventListener("change", renderSweepPanel); });
 }
+
+// ---------------- 搶險封堵時間與兩座水門同時失效（scripts/flow_torch.py closure）----------------
+function closureAvailable() { return typeof CLOSURE_DATA !== "undefined" && !!CLOSURE_DATA && Array.isArray(CLOSURE_DATA.scenarios); }
+function renderClosurePanel() {
+  const box0 = $("closureBox"); if (!box0) return;
+  if (!closureAvailable()) { box0.hidden = true; return; }
+  box0.hidden = false;
+  const D = CLOSURE_DATA, Qs = [...new Set(D.scenarios.filter(s => s.kind === "close").map(s => s.Qpeak))].sort((a, b) => a - b);
+  const svg = $("closureChart"); while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const xs = D.closes, Wd = 600, Ht = 300, box = { l: 50, r: Wd - 92, t: 18, b: Ht - 44 };
+  svg.setAttribute("viewBox", `0 0 ${Wd} ${Ht}`);
+  const xpos = c => { const i = xs.indexOf(c); return box.l + i / (xs.length - 1) * (box.r - box.l); };
+  const series = [];
+  ["key", "all"].forEach(gs => Qs.forEach((Q, qi) => series.push({ gs, Q, dash: qi > 0, pts: xs.map(c => D.scenarios.find(s => s.kind === "close" && s.gates === gs && s.Qpeak === Q && s.closeAt === c)).filter(Boolean) })));
+  let ymax = Math.max(1, ...series.flatMap(s => s.pts.map(p => p.area_peak)));
+  const step = ymax > 2000 ? 500 : ymax > 800 ? 200 : ymax > 300 ? 100 : ymax > 120 ? 50 : 20; ymax = Math.ceil(ymax / step) * step;
+  const Y = v => box.b - v / ymax * (box.b - box.t);
+  for (let v = 0; v <= ymax + 1e-9; v += step) { el("line", { x1: box.l, x2: box.r, y1: Y(v), y2: Y(v), class: "grid-line" }, svg); txt(svg, box.l - 6, Y(v) + 4, String(v), { "text-anchor": "end" }); }
+  xs.forEach(c => txt(svg, xpos(c), box.b + 16, c >= 99 ? "沒封堵" : `${c} h`, { "text-anchor": "middle" }));
+  el("line", { x1: box.l, x2: box.r, y1: box.b, y2: box.b, class: "axis-line" }, svg);
+  txt(svg, (box.l + box.r) / 2, Ht - 6, "水門失效後多久封堵完成（從模擬開始起算）", { "text-anchor": "middle" });
+  txt(svg, box.l - 6, box.t - 4, "公頃", { "text-anchor": "end" });
+  const col = { key: "var(--s1, #2a78d6)", all: "var(--s2, #eb6834)" };
+  series.forEach(s => {
+    if (!s.pts.length) return;
+    el("path", { d: s.pts.map((p, i) => (i ? "L" : "M") + xpos(p.closeAt).toFixed(1) + " " + Y(p.area_peak).toFixed(1)).join(" "), fill: "none", stroke: col[s.gs], "stroke-width": 2.2, "stroke-dasharray": s.dash ? "6 4" : "" }, svg);
+    s.pts.forEach(p => el("circle", { cx: xpos(p.closeAt), cy: Y(p.area_peak), r: 3, fill: col[s.gs] }, svg));
+    const last = s.pts[s.pts.length - 1], qs = RIVER_DATA && RIVER_DATA.qUnit === "%" ? `${s.Q}%` : `${(s.Q / 1000).toFixed(1)} 千 m³/s`;
+    txt(svg, box.r + 6, Y(last.area_peak) + 4, `${s.gs === "key" ? "關鍵" : "全部"} ${qs}`, { "font-size": 11 });
+  });
+  $("closureLegend").innerHTML = `<span><i style="background:${col.key};height:3px"></i>${D.gateNames[D.keyGate]}未關</span><span><i style="background:${col.all};height:3px"></i>所有水門未關</span><span>實線 ${qText(Qs[0])}・虛線 ${qText(Qs[1] || Qs[0])}</span>`;
+  // 結論句：關鍵門、洪峰 100% 時，1 小時內封堵與沒封堵的差別
+  const k = c => (D.scenarios.find(s => s.kind === "close" && s.gates === "key" && s.Qpeak === Qs[0] && s.closeAt === c) || {}).area_peak;
+  const never = k(99), one = k(1), two = k(2);
+  $("closureNow").innerHTML = never > 0.5 ? `${D.gateNames[D.keyGate]}未關、${qText(Qs[0])}：1 小時內封堵完成尖峰淹水 <b class="num">${fmt(one, 0)}</b> 公頃、2 小時 <b class="num">${fmt(two, 0)}</b> 公頃，沒封堵 <b class="num">${fmt(never, 0)}</b> 公頃——1 小時內封堵可少淹 <b class="num">${Math.round((1 - one / never) * 100)}%</b>。` : `${D.gateNames[D.keyGate]}未關在 ${qText(Qs[0])} 時幾乎不進水（底檻高於河水位），封堵時間的影響很小。`;
+  // 兩座水門同時失效：最嚴重的五組，與單獨失效比較
+  const single = gi => { if (!riverAvailable()) return null; const s = RIVER_DATA.scenarios.find(x => x.Qpeak === Qs[0] && x.tide === 1.6 && x.gates === "g" + gi); return s ? s.area_peak : null; };
+  const pairs = D.scenarios.filter(s => s.kind === "pair").sort((a, b) => b.area_peak - a.area_peak).slice(0, 5);
+  $("pairBody").innerHTML = pairs.length ? pairs.map(p => {
+    const [a, b] = p.gates, sa = single(a), sb = single(b);
+    const note = sa === null || sb === null ? "—" : p.area_peak > sa + sb + 5 ? "比兩門各自失效的和還多" : p.area_peak < Math.max(sa, sb) + 5 ? "幾乎只等於較嚴重的那一座（同一片低地）" : "介於兩者之間（部分重疊）";
+    return `<tr><td><b>${D.gateNames[a]}＋${D.gateNames[b]}</b></td><td class="r num">${fmt(p.area_peak, 0)}</td><td class="r num">${sa === null ? "—" : `${fmt(sa, 0)}／${fmt(sb, 0)}`}</td><td>${note}</td></tr>`;
+  }).join("") : `<tr><td colspan="4" class="hint">這個河段只有一座水門。</td></tr>`;
+  $("closureMeta").textContent = `${D.scenarios.length} 個情境・背景雨 ${D.rain} mm/h×2 h・潮位 ${D.tide} m・${D.device === "cuda" ? "Colab GPU" : D.device === "mps" ? "Studio GPU" : D.device}・${D.seconds} 秒`;
+}
