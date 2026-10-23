@@ -7,6 +7,7 @@
   python3 scripts/flow_torch.py sweep <id> [--device cuda] [--out DIR]   # 降雨強度×延時×排水設定的情境集合（內水型）
   python3 scripts/flow_torch.py validate-river <id>      # 以「關鍵水門未關」情境對照瀏覽器（水門入流、越堤）
   python3 scripts/flow_torch.py river <id> [--device cuda] [--out DIR]   # 洪水規模×潮位×水門失效組合的情境集合
+  python3 scripts/flow_torch.py closure <id> [--device cuda] [--out DIR] # 搶險封堵時刻 × 關鍵門／所有門，與兩座門同時失效的所有組合
 演算法逐步對應 flow.js（含水門堰流入流、回流、越堤）。
 """
 import base64, json, sys, time, math, pathlib
@@ -41,8 +42,10 @@ def rain_shape(t, hours):
     if d >= half + ramp: return 0.0
     return 0.5 * (1 + math.cos(math.pi * (d - (half - ramp)) / (2 * ramp)))
 
-def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
-    """scen: list of dict(rain=mm/h, hours, sewerMM, pumpMM, avail). 回傳每個情境的時間序列統計與水深。"""
+def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True, closed=False):
+    """scen: list of dict(rain=mm/h, hours, sewerMM, pumpMM, avail)。回傳每個情境的時間序列統計與水深。
+    分區（全市合併網格，scripts/merge_city.py）：inp["zone"]（每格所屬河段）、inp["catchZone"]（每個集水區所屬河段）、inp["failAt"]（各集水區抽水站失效時刻，小時）；
+    scen["rainZ"]、scen["zrOutZ"]（河段 × 格）給各河段自己的雨量與河道水位；closed=True 時封閉河段之間的格邊（inp["owner"]），用來驗證拼接。"""
     nx, ny, d = inp["nx"], inp["ny"], float(inp["d"]); N = nx * ny; B = len(scen); A = d * d; g = 9.81
     dev = torch.device(device); f32 = torch.float32
     z = torch.tensor(b64arr(inp["z_f32"], np.float32).reshape(ny, nx), device=dev)
@@ -55,6 +58,7 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
     openG = torch.tensor([[bool(s.get("open", [g["open"] for g in G])[gi]) for gi in range(nG)] for s in scen], device=dev)
     zrG = torch.tensor([s.get("zr", [g["zr"] for g in G]) for s in scen], device=dev, dtype=f32)   # (B, nG, nF)
     C_w, openPct, closeAt = float(inp["C"]), float(inp["openPct"]), float(inp["closeAt"])
+    closeB = torch.tensor([float(s.get("closeAt", closeAt)) for s in scen], device=dev, dtype=f32)  # 每個情境的搶險封堵時刻（小時；≥ 模擬時長＝沒封堵）
     # 每座門入口格周邊 5×5 的堤內格，補齊成 (nG, 25)（-1 → 不用），一次向量化處理所有水門
     cellsPad = torch.full((max(nG, 1), 25), -1, dtype=torch.long); nCells = []
     for gi, gt in enumerate(G):
@@ -75,6 +79,7 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
     strIdx = torch.tensor(inp.get("stream", []), device=dev, dtype=torch.long)
     strOn = torch.tensor([bool(s.get("streams", True)) for s in scen], device=dev)
     zStr = z.flatten()[strIdx] if strIdx.numel() else None
+    strZone = torch.tensor(np.asarray(inp["zone"])[inp.get("stream", [])].astype(np.int64), device=dev) if (strIdx.numel() and inp.get("zone") is not None) else None
     def weir(Cc, Bw, up, dn, crest):
         sgn = torch.where(up >= dn, 1.0, -1.0); hi = torch.maximum(up, dn); lo = torch.minimum(up, dn)
         h1 = hi - crest; h2 = torch.clamp(lo - crest, min=0)
@@ -84,11 +89,23 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
     phx = torch.minimum(psi[:, :-1], psi[:, 1:]); phy = torch.minimum(psi[:-1, :], psi[1:, :])
     nx2 = (n0 + 0.08 * (1 - phx)) ** 2; ny2 = (n0 + 0.08 * (1 - phy)) ** 2
     actx = act[:, :-1] & act[:, 1:]; acty = act[:-1, :] & act[1:, :]
+    if closed and inp.get("owner") is not None:  # 封閉河段之間的格邊（等同各河段單獨計算）
+        ow = torch.tensor(np.asarray(inp["owner"]).reshape(ny, nx), device=dev)
+        actx = actx & (ow[:, :-1] == ow[:, 1:]); acty = acty & (ow[:-1, :] == ow[1:, :])
     zmx = torch.maximum(z[:, :-1], z[:, 1:]); zmy = torch.maximum(z[:-1, :], z[1:, :])
     T = inp["simHours"] * 3600; FR = float(inp["frameSec"]); nF = int(round(T / FR)) + 1
     # 每個情境的雨量序列（frame 間線性內插）、排水參數
-    rain = torch.tensor([[s["rain"] * rain_shape(k * FR / 3600, s["hours"]) for k in range(nF)] for s in scen], device=dev, dtype=f32)
-    zrOut = torch.tensor([s.get("zrOut", inp["zrOut"]) for s in scen], device=dev, dtype=f32)  # (B, nF)
+    zoned = "rainZ" in scen[0]
+    if zoned:
+        zoneT = torch.tensor(np.asarray(inp["zone"]).reshape(ny, nx).astype(np.int64), device=dev)
+        rainZ = torch.tensor([s["rainZ"] for s in scen], device=dev, dtype=f32)        # (B, 區, nF)
+        zrZ = torch.tensor([s["zrOutZ"] for s in scen], device=dev, dtype=f32)         # (B, 區, nF)
+        catchZone = torch.tensor(inp["catchZone"], device=dev, dtype=torch.long)
+        rain = rainZ[:, 0]; zrOut = zrZ[:, 0]
+    else:
+        rain = torch.tensor([s["rainSeries"] if "rainSeries" in s else [s["rain"] * rain_shape(k * FR / 3600, s["hours"]) for k in range(nF)] for s in scen], device=dev, dtype=f32)
+        zrOut = torch.tensor([s.get("zrOut", inp["zrOut"]) for s in scen], device=dev, dtype=f32)  # (B, nF)
+    failAt = inp.get("failAt") or scen[0].get("failAt")
     sewerMM = torch.tensor([s["sewerMM"] for s in scen], device=dev, dtype=f32)
     pumpMM = torch.tensor([s["pumpMM"] for s in scen], device=dev, dtype=f32)
     avail = torch.tensor([s["avail"] for s in scen], device=dev, dtype=f32)
@@ -116,6 +133,7 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
             k += 1; nextFrame += FR
             if t >= T: break
         hmax = max(0.01, float(torch.where(act, h, torch.zeros_like(h)).amax()))
+        if progress and step % 2000 == 0 and step: print(f"    step {step} t={t/3600:.2f}h dt={min(10.0, 0.5 * d / math.sqrt(g * hmax)):.2f}s", flush=True)
         dt = min(10.0, 0.5 * d / math.sqrt(g * hmax)); dt = min(dt, nextFrame - t)
         eta = z + h
         # x 向通量
@@ -143,15 +161,20 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
         dh[:, :, 1:] += qxw; dh[:, :, :-1] -= qxw; dh[:, 1:, :] += qyw; dh[:, :-1, :] -= qyw
         h = torch.where(act, torch.clamp(h + dh * dt / d / psi, min=0), h)
         # 降雨
-        r = interp(rain, t) / 1000 / 3600 * dt
-        h = h + torch.where(act, r[:, None, None] / psi, torch.zeros_like(h))
+        if zoned:
+            rc = interp(rainZ, t)[:, zoneT] / 1000 / 3600 * dt                      # (B, ny, nx)
+            h = h + torch.where(act, rc / psi, torch.zeros_like(h))
+        else:
+            r = interp(rain, t) / 1000 / 3600 * dt
+            h = h + torch.where(act, r[:, None, None] / psi, torch.zeros_like(h))
         # 雨水下水道 → 管網 → 抽水／重力排出（依集水區）
         intake = sewerMM / 1000 / 3600 * dt * A
-        gravity = (interp(zrOut, t) < inp["gravityEL"]).to(f32)[:, None]
+        gravity = (interp(zrZ, t)[:, catchZone] < inp["gravityEL"]).to(f32) if zoned else (interp(zrOut, t) < inp["gravityEL"]).to(f32)[:, None]
+        pumpOn = (torch.tensor(failAt, device=dev, dtype=f32) * 3600 > t).to(f32)[None, :] if failAt else 1.0  # 抽水站失效後不再抽水
         hv = h.reshape(B, N)[:, valid]; take = torch.minimum(hv * psiA.flatten()[valid], intake[:, None])
         take = torch.where(hv > 0, take, torch.zeros_like(take))
         dem = torch.zeros(B, nC, device=dev, dtype=f32).index_add_(1, cIdxv, take)
-        drain = (pumpMM[:, None] / 1000 / 3600 * cArea[None, :].to(f32) * avail[:, None] / 100 + gravity * sewerMM[:, None] / 1000 / 3600 * cArea[None, :].to(f32)) * dt
+        drain = (pumpMM[:, None] / 1000 / 3600 * cArea[None, :].to(f32) * avail[:, None] / 100 * pumpOn + gravity * sewerMM[:, None] / 1000 / 3600 * cArea[None, :].to(f32)) * dt
         allow = drain + (cStore - sew)
         fac = torch.where(dem > 0, torch.clamp(torch.clamp(allow, min=0) / torch.clamp(dem, min=1e-12), max=1), torch.zeros_like(dem))
         sew = sew + dem * fac; o = torch.minimum(drain, sew); sew = sew - o
@@ -159,19 +182,19 @@ def simulate(inp, scen, device="cpu", keep_frames=(48,), progress=True):
         hv = torch.clamp(hv - take * facc / psiA.flatten()[valid][None, :], min=0)
         hh = h.reshape(B, N).clone(); hh[:, valid] = hv
         if zStr is not None:
-            hs = hh[:, strIdx]; zrNow = interp(zrOut, t)
-            dr = (hs > 0) & (zStr[None, :] + hs > zrNow[:, None]) & strOn[:, None]
+            hs = hh[:, strIdx]; zrNow = interp(zrZ, t)[:, strZone] if (zoned and strZone is not None) else interp(zrOut, t)[:, None]
+            dr = (hs > 0) & (zStr[None, :] + hs > zrNow) & strOn[:, None]
             hh[:, strIdx] = torch.where(dr, torch.zeros_like(hs), hs)
         # 水門入流（含潛沒與回流）、越堤：入口格周邊 5×5 的堤內格平均分攤（所有水門一次算）
         if gActive:
-            allow_open = closeAt >= inp["simHours"] or t < closeAt * 3600
+            openNow = openG & ((closeB >= inp["simHours"]) | (closeB * 3600 > t))[:, None]
             zr = interp(zrG, t)  # (B, nG)
             hc = hh[:, cellIdx] * cellOk.to(f32)[None]  # (B, nG, 25)
             w = torch.where(hc > 0.01, hc, torch.zeros_like(hc)); ws = w.sum(2)
             eta = torch.where(ws > 0, ((zCells + hc) * w).sum(2) / torch.clamp(ws, min=1e-9), torch.full_like(ws, -99.0))
             vol = (hc * psCells[None]).sum(2)
             Q = (zr > gLevee[None]).to(f32) * weir(1.7, 150.0, zr, eta, gLevee[None])
-            if allow_open: Q = Q + openG.to(f32) * weir(C_w, gW[None] * openPct / 100, zr, eta, gSill[None])
+            Q = Q + openNow.to(f32) * weir(C_w, gW[None] * openPct / 100, zr, eta, gSill[None])
             Q = torch.where(Q < 0, -torch.minimum(-Q, vol * 0.5 / dt), Q)
             qAcc += (Q * dt).to(qAcc.dtype)
             per = (Q * dt / torch.clamp(gCap[None], min=1e-9))[:, :, None].expand(-1, -1, 25) * cellOk.to(f32)[None]  # (B, nG, 25)
@@ -236,6 +259,30 @@ def river(rid, device, outdir):
     (outdir / f"{rid}_river_maps.json").write_text(json.dumps(maps, separators=(",", ":")))
     kg = f"g{rv['keyGate']}"; print(rid, "done", r["steps"], "steps", round(r["seconds"]), "s; key gate open @", Qmid, "tide 1.6: 4h", res["scenarios"][idx[(Qmid, 1.6, kg)]]["area_4h"], "ha peak", res["scenarios"][idx[(Qmid, 1.6, kg)]]["area_peak"], flush=True)
 
+CLOSES = [0.5, 1, 1.5, 2, 3, 4, 6, 99]  # 搶險封堵時刻（小時；99＝沒封堵）
+def closure(rid, device, outdir):
+    """水門失效後多快封堵：關鍵門／所有門未關 × 計畫洪峰 100%、120%（新店溪 7,000、8,500 m³/s）× 封堵時刻；外加 100% 時兩座門同時失效的所有組合"""
+    inp = load(rid); rv = inp["river"]; Qs, nG, kg = rv["stages"]["Qpeaks"], len(rv["gateNames"]), rv["keyGate"]
+    scen, meta = [], []
+    for Q in (Qs[2], Qs[3]):
+        for name, idx in (("key", [kg]), ("all", list(range(nG)))):
+            for c in CLOSES:
+                sc = river_scen(inp, Q, 1.6, idx); sc["closeAt"] = c; scen.append(sc); meta.append(dict(kind="close", Qpeak=Q, gates=name, closeAt=c))
+    for a in range(nG):
+        for b in range(a + 1, nG):
+            scen.append(river_scen(inp, Qs[2], 1.6, [a, b])); meta.append(dict(kind="pair", Qpeak=Qs[2], gates=[a, b], closeAt=99))
+    print(rid, len(scen), "closure/pair scenarios on", device, flush=True); r = simulate(inp, scen, device, keep_frames=(), progress=True)
+    area = np.array(r["area"]); deep = np.array(r["deep"])
+    res = {"region": rid, "qUnit": rv["qUnit"], "gateNames": rv["gateNames"], "keyGate": kg, "closes": CLOSES, "rain": RIVER_RAIN, "tide": 1.6,
+           "steps": r["steps"], "seconds": round(r["seconds"]), "device": device, "scenarios": []}
+    for b, m in enumerate(meta):
+        res["scenarios"].append({**m, "area_peak": round(float(area[:, b].max()), 1), "deep_peak": round(float(deep[:, b].max()), 1), "area_8h": round(float(area[-1, b]), 1),
+                                 "inflow_m3": round(float(r["inflow_m3"][b].sum()))})
+    outdir = pathlib.Path(outdir); outdir.mkdir(parents=True, exist_ok=True)
+    (outdir / f"{rid}_closure.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")))
+    k = [x for x in res["scenarios"] if x["kind"] == "close" and x["gates"] == "key" and x["Qpeak"] == Qs[2]]
+    print(rid, "done", round(r["seconds"]), "s; key gate @100%:", [(x["closeAt"], x["area_peak"]) for x in k], flush=True)
+
 def sweep(rid, device, outdir):
     inp = load(rid); scen, meta = [], []
     for dn, sw, pm, av in DRAIN:
@@ -270,4 +317,4 @@ if __name__ == "__main__":
     cmd, rid = sys.argv[1], sys.argv[2]
     device = sys.argv[sys.argv.index("--device") + 1] if "--device" in sys.argv else ("cuda" if torch.cuda.is_available() else "cpu")  # cuda / mps / cpu
     out = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else str(ROOT / "work/sweep")
-    {"validate": lambda: validate(rid, device), "validate-river": lambda: validate_river(rid, device), "river": lambda: river(rid, device, out)}.get(cmd, lambda: sweep(rid, device, out))()
+    {"validate": lambda: validate(rid, device), "validate-river": lambda: validate_river(rid, device), "river": lambda: river(rid, device, out), "closure": lambda: closure(rid, device, out)}.get(cmd, lambda: sweep(rid, device, out))()
