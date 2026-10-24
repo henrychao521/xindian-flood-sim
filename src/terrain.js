@@ -231,6 +231,7 @@ function renderContour(fr) {
   drawStreamsOnMap(g);
   drawOSMOnMap(g, waterLevels(fr));
   drawInundOverlay(g, W, H);  // 疊在道路與建物之上，官方積水格多半在街道上
+  if (typeof drawLiveOnMap === "function") drawLiveOnMap(g);  // 即時測站（讀取後才畫）
   if (typeof drawSweepOverlay === "function") drawSweepOverlay(g, W, H);
   const ic = $("inundCmp"); if (ic) { ic.innerHTML = inundCompare(); ic.hidden = !ic.innerHTML; }
   (REGION.mapLabels || []).forEach(([i, j, s]) => { const [px, py] = cellToCanvas(i, j); tag(g, px, py, s); });
@@ -293,7 +294,7 @@ function updateContourInfo() {
   const k = idx(contourHover.i, contourHover.j), z = DEM.z[k], l = contourWater && contourWater[k];
   const x = DEM.x0 + (contourHover.i + 0.5) * DEM.d, y = DEM.y0 + (contourHover.j + 0.5) * DEM.d;
   const kind = DEM.nodata[k] ? "臺北市界外（DEM 無資料，畫面補值）" : DEM.mask[k] === 2 ? "防洪牆" : DEM.mask[k] === 1 ? "堤內" : DEM.mask[k] === 3 ? "對岸（不在模擬範圍）" : "堤外";
-  box.innerHTML = `TWD97 <span class="num">${Math.round(x)}, ${Math.round(y)}</span>・${kind}・地面 EL. <b class="num">${fmt(z)}</b> m・` + (l && !isNaN(l) ? `水深 <b class="num">${fmt(l - z)}</b> m` : "無積水") + inundLabel(k) + (typeof sweepLabel === "function" ? sweepLabel(k) : "");
+  box.innerHTML = `TWD97 <span class="num">${Math.round(x)}, ${Math.round(y)}</span>・${kind}・地面 EL. <b class="num">${fmt(z)}</b> m・` + (l && !isNaN(l) ? `水深 <b class="num">${fmt(l - z)}</b> m` : "無積水") + inundLabel(k) + (typeof sweepLabel === "function" ? sweepLabel(k) : "") + (typeof liveHover === "function" ? liveHover(k) : "");
   const pb = nearestPub(x - DEM.x0, y - DEM.y0); if (pb) box.innerHTML += `・<b>${pb.n}</b>（${pb.label}）`;
 }
 function bindContourHover() {

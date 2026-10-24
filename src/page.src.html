@@ -94,6 +94,12 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .check { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
 .check input { accent-color: var(--accent); width: 16px; height: 16px; }
 .gate-list { display: grid; gap: 6px; }
+.live-ctl { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; }
+.live-btn { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); cursor: pointer; }
+.live-btn:hover { filter: brightness(1.08); }
+.live-ctl select { font: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 3px 6px; max-width: 100%; }
+.live-sim { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.pill { display: inline-block; color: #fff; font-size: 12px; padding: 1px 8px; border-radius: 10px; }
 .inund-ctl { align-items: center; }
 .inund-ctl .check { flex: 1 1 100%; min-width: 0; }
 .inund-ctl select { max-width: 100%; font: inherit; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 2px 6px; }
@@ -385,6 +391,26 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <div class="hint">封堵時刻從模擬開始（洪水上漲前約 2 小時）起算；封堵後水門不再進水，越堤照算。兩座門同時失效時，若進水流到同一片低地，面積幾乎只等於較嚴重的那一座。</div>
         </div>
       </section>
+      <section class="panel" id="livePanel">
+        <div class="chart-head"><h2>即時降雨與排水負荷（民生公共物聯網測站）</h2><span class="hint" id="liveWhen">尚未讀取</span></div>
+        <div class="live-ctl">
+          <button type="button" class="live-btn" id="liveLoad">讀取最新觀測</button>
+          <label class="check"><input type="checkbox" id="liveShow" checked> 地圖顯示測站</label>
+          <label class="check"><input type="checkbox" id="liveAuto"> 每 10 分鐘自動更新</label>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>抽水站集水區</th><th class="r">10 分鐘 mm</th><th class="r">1 小時 mm</th><th class="r">3 小時 mm</th><th>雨量站（權重）</th><th class="r">水位站 有效／總數</th><th class="r">滿管比例 中位／最大</th><th>狀態</th><th class="r">模型管網（觀測時刻）</th></tr></thead><tbody id="liveBody"></tbody></table></div>
+        <div class="live-sim">
+          <div class="group-title">用實測雨量模擬：過去 3 小時實測 ＋ 未來 2 小時</div>
+          <div class="live-ctl">
+            <label class="check">未來 2 小時：<select id="liveFuture"><option value="stop">停雨</option><option value="last10" selected>維持最近 10 分鐘的強度</option><option value="last60">維持最近 1 小時的平均</option><option value="slider">用「市區降雨強度」滑桿的值</option></select></label>
+            <button type="button" class="live-btn" id="liveRun">開始模擬</button>
+          </div>
+          <div class="group-title">設備變因：勾選的抽水站視為從頭就停機（抽水機可用率、下水道收水能力、河道水位沿用左側滑桿）</div>
+          <div class="live-ctl" id="livePumps"></div>
+          <div class="hint" id="liveRunNote"></div>
+          <div class="hint" id="liveNote"></div>
+        </div>
+      </section>
       <section class="panel" id="nariPanel" hidden>
         <div class="chart-head"><h2>納莉颱風紀錄對照（2001/9/16–17）</h2><span class="hint">16 小時內的最大水深</span></div>
         <svg id="nariRain" role="img" aria-label="納莉颱風逐時雨量"></svg>
@@ -583,6 +609,7 @@ function recompute() {
   frames = simulate(P);
   $("time").max = frames.length - 1; $("close").max = SIM_HOURS; if (tIdx > frames.length - 1) tIdx = frames.length - 1;
   if (typeof renderNari === "function") renderNari();
+  if (typeof renderLive === "function") renderLive();
   resetParticles();
   render();
   if (typeof renderSweepPanel === "function") renderSweepPanel();
@@ -823,6 +850,7 @@ function render() {
 //@@FLOW@@
 //@@SWEEP@@
 //@@NARI@@
+//@@LIVE@@
 
 // ---------------- 播放 ----------------
 let tPos = null; // 播放中的連續時間（以 5 分鐘為 1 格），供 3D 內插

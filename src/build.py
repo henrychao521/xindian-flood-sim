@@ -85,7 +85,7 @@ data += "const NARI_CITY=" + (json.dumps(nc, ensure_ascii=False) if nc else "nul
 data += "const NARI_DATA=" + (r(sd / "nari.json") if (sd / "nari.json").exists() else "null") + ";\n"
 data += "const STREAM_DATA=" + (r(sd / "streams.json") if (sd / "streams.json").exists() else "null") + ";\n"
 data += "const DISP_DATA=" + (r(sd / "disp.json") if (sd / "disp.json").exists() else "null") + ";\n"
-for a, b in [("//@@DEMDATA@@", data), ("//@@SWEEP@@", r(S / "sweep.js")), ("//@@NARI@@", r(S / "nari.js")), ("//@@REGIONDATA@@", regiondata), ("//@@ENGINE@@", r(S / "engine.js")), ("//@@TERRAIN@@", r(S / "terrain.js")), ("//@@FLOW@@", r(S / "flow.js") + "\n" + r(S / "osm.js"))]:
+for a, b in [("//@@DEMDATA@@", data), ("//@@SWEEP@@", r(S / "sweep.js")), ("//@@NARI@@", r(S / "nari.js")), ("//@@LIVE@@", r(S / "live.js")), ("//@@REGIONDATA@@", regiondata), ("//@@ENGINE@@", r(S / "engine.js")), ("//@@TERRAIN@@", r(S / "terrain.js")), ("//@@FLOW@@", r(S / "flow.js") + "\n" + r(S / "osm.js"))]:
     assert a in src, a
     src = src.replace(a, b)
 for a, b in ph.items():

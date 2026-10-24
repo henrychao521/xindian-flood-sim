@@ -66,7 +66,7 @@ function getBasins() {
 }
 
 // 歷史情境：逐時雨量（mm/h，第 k 小時＝[k, k+1)）、河川歷線（單峰：qBase→1→退水，峰值在 tp）
-function seriesRain(p, t) { const k = Math.min(p.rainSeries.length - 1, Math.max(0, Math.floor(t))); return p.rainSeries[k]; }
+function seriesRain(p, t) { const step = p.rainStepH || 1; const k = Math.min(p.rainSeries.length - 1, Math.max(0, Math.floor(t / step))); return p.rainSeries[k]; }  // 即時情境是 10 分鐘一格（rainStepH = 1/6）
 function seriesQ(p, t) { const b = p.qBase ?? 0.35, w = t < p.tp ? 3.5 : 5; return b + (1 - b) * Math.exp(-Math.pow((t - p.tp) / w, 2)); }
 function simulate(p) {
   SIM_HOURS = p.simHours || 8;
