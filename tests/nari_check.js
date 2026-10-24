@@ -18,6 +18,7 @@ const { chromium } = require('playwright');
     return { frames: frames.length, series: A, maxArea: (wet * 0.04).toFixed(0), maxDeep: (deep * 0.04).toFixed(0), keyStagePeak: `${Math.max(...zr).toFixed(2)} at ${hhmm(frames[pk].t)}`, records: nariRecordStats().map(x => ({ district: x.district, where: x.where, depth: x.depth, med: x.med === null ? null : +x.med.toFixed(2), p90: x.p90 === null ? null : +x.p90.toFixed(2), segs: x.n, verdict: nariVerdict(x) })) };
   });
   console.log('nari', 'sec', Math.round((Date.now() - t0) / 1000), 'max', out.maxArea, 'ha, deep', out.maxDeep, 'ha, stage', out.keyStagePeak, out.records.map(x => x.verdict).join('/'), 'errors', errs);
+  await p.evaluate(() => showTab('stats')); await p.waitForTimeout(300);
   const sec = await p.$('#nariPanel'); await sec.scrollIntoViewIfNeeded(); await sec.screenshot({ path: pre + '_nari.png' });
   require('fs').writeFileSync(pre + '_nari.json', JSON.stringify(out));
   await b.close();

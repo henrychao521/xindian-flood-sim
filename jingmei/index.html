@@ -67,9 +67,19 @@ header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); 
 h1 { font-family: var(--font-display); font-size: clamp(24px, 3.4vw, 34px); margin: 0; text-wrap: balance; line-height: 1.25; }
 h2 { font-size: 15px; margin: 0; font-weight: 700; }
 .lede { margin: 0; color: var(--muted); max-width: 70ch; }
-.jump { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; margin: 8px 0 0; }
-.jump a { color: var(--accent); text-decoration: none; white-space: nowrap; } .jump a:hover { text-decoration: underline; }
-.jump a::before { content: "↓ "; color: var(--muted); }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; margin-bottom: -6px; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button { font: inherit; font-size: 13.5px; padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); cursor: pointer; white-space: nowrap; margin-bottom: -1px; }
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.main > [data-tab]:not(.tab-on) { display: none !important; }
+details.how { font-size: 12px; color: var(--muted); }
+details.how > summary { cursor: pointer; color: var(--accent); list-style: none; display: inline-flex; align-items: center; gap: 4px; }
+details.how > summary::-webkit-details-marker { display: none; }
+details.how > summary::before { content: "▸"; font-size: 10px; transition: transform .15s; }
+details.how[open] > summary::before { transform: rotate(90deg); }
+details.how > *:not(summary) { margin-top: 8px; }
+select { font: inherit; font-size: 12.5px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 3px 8px; max-width: 100%; }
 #sweepChart text { font-size: 12.5px; } #sweepChart .t-ink { font-size: 12.5px; }
 .num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
 
@@ -88,10 +98,22 @@ h2 { font-size: 15px; margin: 0; font-weight: 700; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
 .controls { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px - env(safe-area-inset-top, 0px)); overflow-y: auto; }
-@media (max-width: 900px) { .controls { position: static; max-height: none; overflow: visible; } .timebar .clock { white-space: normal; } }
-.group { display: grid; gap: 10px; }
-.group + .group { border-top: 1px solid var(--line); padding-top: 14px; }
+.ctl-toggle { display: none; }
+@media (max-width: 900px) {
+  .controls { position: static; max-height: none; overflow: visible; }
+  .timebar .clock { white-space: normal; }
+  /* 手機：控制列預設收起，點按展開，結果先看得到 */
+  .ctl-toggle { display: block; font: inherit; font-size: 14px; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); cursor: pointer; }
+  .controls:not(.open) { display: none; }
+}
+.group { display: block; }
+.group > :not(summary) { margin-top: 10px; }
+.group + .group { border-top: 1px solid var(--line); padding-top: 12px; }
 .group-title { font-size: 12px; letter-spacing: .06em; color: var(--muted); font-weight: 500; }
+summary.group-title { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+summary.group-title::-webkit-details-marker { display: none; }
+summary.group-title::after { content: "▾"; color: var(--muted); font-size: 11px; transition: transform .15s; }
+details.group:not([open]) > summary.group-title::after { transform: rotate(-90deg); }
 .ctl { display: grid; gap: 4px; }
 .ctl-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
 .ctl-head output { font-family: var(--font-data); font-weight: 500; white-space: nowrap; }
@@ -103,13 +125,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .live-ctl { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; }
 .live-btn { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--surface); cursor: pointer; }
 .live-btn:hover { filter: brightness(1.08); }
-.live-ctl select { font: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 3px 6px; max-width: 100%; }
 .live-sim { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
 .pill { display: inline-block; color: #fff; font-size: 12px; padding: 1px 8px; border-radius: 10px; }
 .inund-ctl { align-items: center; }
 .inund-ctl .check { flex: 1 1 100%; min-width: 0; }
-.inund-ctl select { max-width: 100%; font: inherit; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); padding: 2px 6px; }
-.gate-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); }
+.gate-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); }
 .gate-row small { color: var(--muted); display: block; font-size: 11.5px; }
 .gate-row.failed { border-color: var(--danger); }
 .switch { font: inherit; font-size: 12px; border-radius: 6px; padding: 3px 10px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ok); white-space: nowrap; }
@@ -202,13 +222,13 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
   </header>
 
   <div class="presets" id="presets" role="group" aria-label="情境範例"></div>
-  <nav class="jump" aria-label="頁面段落"><a href="#sec-stage">水位與流量</a><a href="#sec-profile">河道縱斷面</a><a href="#sec-terrain">地形與二維水流</a><a href="#sec-sweep">情境集合</a><a href="#sec-bld">建物</a><a href="#sec-infra">道路與設施</a><a href="#sec-notes">假設與限制</a></nav>
 
 
   <div class="layout">
-    <aside class="panel controls" aria-label="模擬參數">
-      <div class="group">
-        <div class="group-title">河川與天候</div>
+    <button type="button" class="ctl-toggle" id="ctlToggle" aria-expanded="false" aria-controls="controls">調整參數（洪水、雨量、排水、水門）▾</button>
+    <aside class="panel controls" id="controls" aria-label="模擬參數">
+      <details class="group" open>
+        <summary class="group-title">河川與天候</summary>
         <div class="ctl">
           <div class="ctl-head"><label for="q">洪水規模（計畫洪峰流量 %）</label><output id="qOut" class="num"></output></div>
           <input type="range" id="q" min="20" max="140" step="5">
@@ -225,21 +245,21 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         <div class="ctl">
           <div class="ctl-head"><label for="rainHours">降雨延時</label><output id="rainHoursOut" class="num"></output></div>
           <input type="range" id="rainHours" min="0.5" max="6" step="0.5">
-          <div class="hint">總雨量＝峰值強度 × 延時，雨型為 T+3 h 為峰的單峰。水利處降雨積水模擬圖的 78.8／100／130 mm/h 是 1 小時的短延時情境。</div>
+          <div class="hint">總雨量＝峰值 × 延時；水利處模擬圖的情境是 1 小時。</div>
         </div>
-      </div>
+      </details>
 
-      <div class="group">
-        <div class="group-title">排水系統</div>
+      <details class="group">
+        <summary class="group-title">排水系統</summary>
         <div class="ctl">
           <div class="ctl-head"><label for="sewer">雨水下水道收水能力</label><output id="sewerOut" class="num"></output></div>
           <input type="range" id="sewer" min="40" max="120" step="0.1">
-          <div class="hint">臺北市設計標準 78.8 mm/hr（5 年重現期暴雨），長期目標 88.8 mm/hr。</div>
+          <div class="hint">設計標準 78.8 mm/hr（5 年重現期）。</div>
         </div>
         <div class="ctl">
           <div class="ctl-head"><label for="pumpmm">抽水站抽水能力</label><output id="pumpOut" class="num"></output></div>
           <input type="range" id="pumpmm" min="0" max="90" step="5">
-          <div class="hint">設計標準 45 mm/hr（5 年重現期颱風雨），新建或更新時提高到 60 mm/hr。</div>
+          <div class="hint">設計 45 mm/hr，新建站 60 mm/hr。</div>
         </div>
         <div class="ctl" id="streamCtl">
           <label class="check"><input type="checkbox" id="streamOn"> 山區溪流可排水</label>
@@ -248,12 +268,11 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         <div class="ctl">
           <div class="ctl-head"><label for="avail">抽水機可用率</label><output id="availOut" class="num"></output></div>
           <input type="range" id="avail" min="0" max="100" step="10">
-          <div class="hint">停電、機組故障或進水口阻塞時調低。</div>
         </div>
-      </div>
+      </details>
 
-      <div class="group">
-        <div class="group-title">疏散門（點按切換，或點地圖上的水門）</div>
+      <details class="group" open>
+        <summary class="group-title">疏散門（點按切換，或點地圖上的水門）</summary>
         <div class="gate-list" id="gateList"></div>
         <div class="ctl">
           <div class="ctl-head"><label for="open">未關閉水門的開口比例</label><output id="openOut" class="num"></output></div>
@@ -263,17 +282,17 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <div class="ctl-head"><label for="close">搶險封堵完成時間</label><output id="closeOut" class="num"></output></div>
           <input type="range" id="close" min="0.5" max="8" step="0.5">
         </div>
-      </div>
+      </details>
 
-      <div class="group">
-        <div class="group-title">水門缺口流量係數</div>
+      <details class="group">
+        <summary class="group-title">水門缺口流量係數</summary>
         <div class="ctl">
           <div class="ctl-head"><label for="cc">C（Q = C·B·H<sup>1.5</sup>，SI）</label><output id="ccOut" class="num"></output></div>
           <input type="range" id="cc" min="1.1" max="1.8" step="0.05">
-          <div class="hint">文獻合理範圍 1.45–1.70（C<sub>d</sub> 0.85–1.0 × 1.705）；預設 1.55。</div>
+          <div class="hint">文獻 1.45–1.70；預設 1.55。</div>
         </div>
         <label class="check"><input type="checkbox" id="cPdf"> 改用 PDF 原文係數比較（≈ 17，不符物理）</label>
-      </div>
+      </details>
     </aside>
 
     <main class="main">
@@ -288,7 +307,16 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         </div>
       </div>
 
-      <div class="one">
+      <nav class="tabs" id="tabs" role="tablist" aria-label="內容分頁">
+        <button type="button" role="tab" data-tab="now" aria-selected="true">水位與流量</button>
+        <button type="button" role="tab" data-tab="map" aria-selected="false">地圖與 3D</button>
+        <button type="button" role="tab" data-tab="sweep" aria-selected="false">情境集合</button>
+        <button type="button" role="tab" data-tab="live" aria-selected="false">即時觀測</button>
+        <button type="button" role="tab" data-tab="stats" aria-selected="false">災情統計</button>
+        <button type="button" role="tab" data-tab="notes" aria-selected="false">說明與來源</button>
+      </nav>
+
+      <div class="one" data-tab="now">
         <section class="panel">
           <div class="chart-head">
             <h2 id="tsTitle">水位歷線</h2>
@@ -304,7 +332,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         </section>
       </div>
 
-      <section class="panel" id="sec-profile">
+      <section class="panel" id="sec-profile" data-tab="now">
         <div class="chart-head">
           <h2>河道縱斷面</h2>
           <div class="legend"><span><i style="background:var(--river)"></i>水面</span><span><i style="background:var(--muted)"></i>防洪牆堤頂</span><span><i style="background:var(--ground)"></i>高灘地</span><span><i style="background:var(--danger)"></i>水門底檻</span></div>
@@ -312,7 +340,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         <div class="table-wrap" style="overflow-x:auto"><svg id="profile" viewBox="0 0 820 300" style="min-width:560px" role="img" aria-label="河道水位縱斷面"></svg></div>
       </section>
 
-      <section class="panel" id="sec-terrain">
+      <section class="panel" id="sec-terrain" data-tab="map">
         <div class="chart-head">
           <h2>臺北市側堤內實測地形：二維水流、等高線與 3D</h2>
           <span class="hint" id="terrainWhen"></span>
@@ -322,14 +350,16 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
             <div class="contour-wrap"><canvas id="contour" width="840" height="630" aria-label="萬華、中正、大安新店溪北岸實測等高線地形圖，疊加目前淹水範圍與建物"></canvas><canvas id="flowLayer" width="840" height="630" aria-hidden="true"></canvas></div>
             <div class="info-line" id="flowStatus"></div>
             <div class="info-line" id="contourInfo"></div>
-            <div class="legend"><span><i style="background:#123f9e;height:8px"></i>堤內積水（越深越濃）</span><span><i style="background:rgb(120,200,235);height:8px"></i>堤外河道、高灘地</span></div>
+            <div class="legend"><span><i style="background:#123f9e;height:8px"></i>堤內積水（越深越濃）</span><span><i style="background:rgb(120,200,235);height:8px"></i>堤外河道、高灘地</span><span><i style="background:#2b2b2b;height:4px"></i>橋樑</span><span><i style="background:#5b2a86;height:8px;border-radius:50%"></i>公共設施</span><span><i style="background:rgb(214,69,65);height:3px"></i>道路中斷</span></div>
+            <details class="how"><summary>圖層與完整圖例</summary>
             <div class="legend inund-ctl"><label class="check"><input type="checkbox" id="showInund"> 疊上臺北市水利處「降雨積水模擬圖」（112 年版）</label><select id="inundCase" aria-label="模擬圖降雨情境"><option value="78.8">78.8 mm/h</option><option value="100" selected>100 mm/h</option><option value="130">130 mm/h</option></select><span><i style="background:rgb(190,40,150);opacity:.6;height:8px"></i>官方模擬積水 ≥ 0.15 m（越深越濃）</span></div>
-            <div class="hint" id="inundCmp" hidden></div>
             <div class="legend inund-ctl" id="sweepCtl"><label class="check" for="sweepLayer">疊上 GPU 情境集合（128 個降雨情境，Colab 批次計算）</label><select id="sweepLayer" aria-label="情境集合圖層"><option value="none" selected>不疊圖</option><option value="thresh">淹水門檻：多大的雨會淹到這裡（1 h 定強度）</option><option value="prob">淹水機率（設計排水，32 個強度×延時情境）</option><option value="hmax">最大水深包絡（1 h 定強度，可選強度）</option><option value="gate" id="sweepLayerGateOpt">水門失效包絡（選水門）</option></select><select id="sweepCase" aria-label="包絡圖降雨強度"></select><select id="sweepGate" aria-label="水門失效包絡的水門"></select><span id="sweepThreshLegend"></span><span><i style="background:rgb(230,90,30);opacity:.7;height:8px"></i>機率越高越濃（&lt; 25% 不畫）</span><span><i style="background:rgb(90,40,200);opacity:.7;height:8px"></i>最大水深越深越濃</span></div>
             <div class="hint">水利處模擬圖是 1 小時短延時降雨、河道常水位、依實際雨水下水道網路計算的結果；要對照請選「短延時暴雨 100 mm/h」情境。資料：臺北市政府工務局水利工程處（data.taipei，政府資料開放授權條款第 1 版）。</div>
             <div class="ramp"><span>EL. 3 m</span><span class="ramp-bar"></span><span>8 m</span><span>・防洪牆為深灰色</span></div>
             <div class="legend"><span><i style="background:#2b2b2b;height:4px"></i>橋樑</span><span><i style="background:#5b2a86;height:8px;border-radius:50%"></i>公共設施</span><span><i style="background:#fff;height:8px;border:2px solid #555;width:8px"></i>其他疏散門（OSM）</span><span><i style="background:rgb(214,69,65);height:3px"></i>道路中斷</span><span><i style="background:rgb(242,153,74);height:3px"></i>道路危險</span><span class="stream-leg"><i style="background:#1f78b4;height:3px"></i>山區溪流（OSM 明渠）</span></div>
             <div class="legend"><span><i style="background:rgb(222,216,206);height:8px"></i>建物未淹水</span><span><i style="background:rgb(242,201,76);height:8px"></i>建物周邊水深 0.1–0.5 m</span><span><i style="background:rgb(242,153,74);height:8px"></i>0.5–1 m</span><span><i style="background:rgb(214,69,65);height:8px"></i>≥ 1 m</span></div>
+            </details>
+            <div class="hint" id="inundCmp" hidden></div>
           </div>
           <div>
             <div id="view3d"><div id="calcOverlay" class="calc-ov" hidden></div></div>
@@ -341,13 +371,13 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
               <label class="check"><input type="checkbox" id="showBld" checked> 顯示建物</label>
               <button type="button" class="btn-ghost" id="reset3d">重設視角</button>
             </div>
-            <div class="hint">拖曳旋轉、滾輪或雙指縮放、右鍵平移。建物高度以約 5 倍比例顯示，顏色代表建物周邊水深。按「播放動態」看 8 小時內水面連續漲退；白色流線是堤內漫流，淡藍色是新店溪主流（主流流速依流量粗估），移動速度是實際流速的 120 倍。紅色方塊是未關閉的水門，關閉時變綠。</div>
+            <details class="how"><summary>操作與圖例</summary><div class="hint">拖曳旋轉、滾輪或雙指縮放、右鍵平移。建物高度以約 5 倍比例顯示，顏色代表建物周邊水深。按「播放動態」看 8 小時內水面連續漲退；白色流線是堤內漫流，淡藍色是新店溪主流（主流流速依流量粗估），移動速度是實際流速的 120 倍。紅色方塊是未關閉的水門，關閉時變綠。</div></details>
           </div>
         </div>
-        <div class="hint">地形取自內政部 2025 年 20 m DEM（臺北市分幅，TWD97 E 302600–310400、N 2762600–2767600，約 7.8 × 5.0 km）。堤線沿河道邊緣自動建立，必要處依地形手動補描；堤頂高程以 DEM 與設定值取大。疏散門位置取自臺北市水利處疏散門清單與 OpenStreetMap。堤內面積約 35.53 km²；範圍邊界視為封閉。</div>
+        <details class="how"><summary>地形、堤線與水門位置怎麼來的</summary><div class="hint">地形取自內政部 2025 年 20 m DEM（臺北市分幅，TWD97 E 302600–310400、N 2762600–2767600，約 7.8 × 5.0 km）。堤線沿河道邊緣自動建立，必要處依地形手動補描；堤頂高程以 DEM 與設定值取大。疏散門位置取自臺北市水利處疏散門清單與 OpenStreetMap。堤內面積約 35.53 km²；範圍邊界視為封閉。</div></details>
       </section>
 
-      <section class="panel" id="sweepPanel"><a id="sec-sweep"></a>
+      <section class="panel" id="sweepPanel" data-tab="sweep"><a id="sec-sweep"></a>
         <div class="chart-head">
           <h2>降雨強度與淹水面積：GPU 情境集合</h2>
           <span class="hint" id="sweepMeta"></span>
@@ -356,7 +386,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         <div class="legend inund-ctl"><label for="sweepDrain">排水設定</label><select id="sweepDrain" aria-label="排水設定"></select><label for="sweepMetric">指標</label><select id="sweepMetric" aria-label="指標"><option value="peak" selected>8 小時內尖峰淹水面積（≥ 0.1 m）</option><option value="t4h">T+4 h 淹水面積（與頁面統計同一時刻）</option><option value="deep">尖峰 ≥ 0.5 m 面積</option></select></div>
         <svg id="sweepChart" role="img" aria-label="降雨強度與淹水面積曲線"></svg>
         <div class="info-line" id="sweepNow"></div>
-        <div class="hint">同一套二維水流模型（src/flow.js 移植成 PyTorch，scripts/flow_torch.py）在 Colab GPU 一次算完 8 種強度 × 4 種延時 × 4 種排水設定、水門關閉的內水型情境；每條線是一種降雨延時。頁面上的 T+4 h 統計只是一個時刻的快照，定強度降雨結束後積水會先擴到尖峰再被抽排掉，所以尖峰面積通常比 T+4 h 大。洋紅方塊是臺北市水利處降雨積水模擬圖（1 小時、≥ 0.15 m）的面積，供數量級對照。</div>
+        <details class="how"><summary>怎麼算的</summary><div class="hint">同一套二維水流模型（src/flow.js 移植成 PyTorch，scripts/flow_torch.py）在 Colab GPU 一次算完 8 種強度 × 4 種延時 × 4 種排水設定、水門關閉的內水型情境；每條線是一種降雨延時。頁面上的 T+4 h 統計只是一個時刻的快照，定強度降雨結束後積水會先擴到尖峰再被抽排掉，所以尖峰面積通常比 T+4 h 大。洋紅方塊是臺北市水利處降雨積水模擬圖（1 小時、≥ 0.15 m）的面積，供數量級對照。</div></details>
         </div>
         <div id="riverBox" style="display:grid;gap:14px;border-top:1px solid var(--line);padding-top:14px" hidden>
           <div class="chart-head"><h3 style="margin:0;font-size:14px">洪水規模與淹水面積：水門失效情境集合</h3><span class="hint" id="riverMeta"></span></div>
@@ -364,7 +394,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <svg id="riverChart" role="img" aria-label="洪水規模與淹水面積曲線（各水門失效）"></svg>
           <div class="legend" id="riverLegend"></div>
           <div class="info-line" id="riverNow"></div>
-          <div class="hint">每條線是一座水門未關（或全關、全部未關）時，洪水規模從小到大的尖峰淹水面積；河道水位用頁面同一套水位模型（洪峰時段 T+2–4 h 與潮位同步），背景雨 40 mm/h × 2 h，排水設計值。虛線「全關」只剩越堤。地圖可疊「水門失效包絡」看每座水門失效時水往哪裡去。</div>
+          <details class="how"><summary>怎麼算的</summary><div class="hint">每條線是一座水門未關（或全關、全部未關）時，洪水規模從小到大的尖峰淹水面積；河道水位用頁面同一套水位模型（洪峰時段 T+2–4 h 與潮位同步），背景雨 40 mm/h × 2 h，排水設計值。虛線「全關」只剩越堤。地圖可疊「水門失效包絡」看每座水門失效時水往哪裡去。</div></details>
         </div>
         <div id="closureBox" style="display:grid;gap:14px;border-top:1px solid var(--line);padding-top:14px" hidden>
           <div class="chart-head"><h3 style="margin:0;font-size:14px">搶險封堵越快，少淹多少？</h3><span class="hint" id="closureMeta"></span></div>
@@ -372,10 +402,10 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <div class="legend" id="closureLegend"></div>
           <div class="info-line" id="closureNow"></div>
           <div class="table-wrap"><table><thead><tr><th>兩座水門同時失效（最嚴重的五組，計畫洪峰 100%、潮位 1.6 m）</th><th class="r">尖峰淹水 ha</th><th class="r">各自單獨失效 ha</th><th>兩者關係</th></tr></thead><tbody id="pairBody"></tbody></table></div>
-          <div class="hint">封堵時刻從模擬開始（洪水上漲前約 2 小時）起算；封堵後水門不再進水，越堤照算。兩座門同時失效時，若進水流到同一片低地，面積幾乎只等於較嚴重的那一座。</div>
+          <details class="how"><summary>怎麼算的</summary><div class="hint">封堵時刻從模擬開始（洪水上漲前約 2 小時）起算；封堵後水門不再進水，越堤照算。兩座門同時失效時，若進水流到同一片低地，面積幾乎只等於較嚴重的那一座。</div></details>
         </div>
       </section>
-      <section class="panel" id="livePanel">
+      <section class="panel" id="livePanel" data-tab="live">
         <div class="chart-head"><h2>即時降雨與排水負荷（民生公共物聯網測站）</h2><span class="hint" id="liveWhen">尚未讀取</span></div>
         <div class="live-ctl">
           <button type="button" class="live-btn" id="liveLoad">讀取最新觀測</button>
@@ -392,10 +422,10 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
           <div class="group-title">設備變因：勾選的抽水站視為從頭就停機（抽水機可用率、下水道收水能力、河道水位沿用左側滑桿）</div>
           <div class="live-ctl" id="livePumps"></div>
           <div class="hint" id="liveRunNote"></div>
-          <div class="hint" id="liveNote"></div>
+          <details class="how"><summary>資料來源與算法</summary><div class="hint" id="liveNote"></div></details>
         </div>
       </section>
-      <section class="panel" id="nariPanel" hidden>
+      <section class="panel" id="nariPanel" data-tab="stats" hidden>
         <div class="chart-head"><h2>納莉颱風紀錄對照（2001/9/16–17）</h2><span class="hint">16 小時內的最大水深</span></div>
         <svg id="nariRain" role="img" aria-label="納莉颱風逐時雨量"></svg>
         <div class="info-line" id="nariMeta"></div>
@@ -407,10 +437,10 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         </div>
         <div class="info-line" id="nariCityNote"></div>
         <div class="hint" id="nariNotes"></div>
-        <div class="hint">比對方式：找範圍內名稱以紀錄路名開頭的道路，取每段道路所在 20 m 格在 16 小時內的最大水深。紀錄是「該區域的積水深度」，道路只是代表位置；20 m 網格與集總式下水道抓不到街道尺度的差異，請看量級與有沒有淹，不要看到公分。</div>
+        <details class="how"><summary>比對方式</summary><div class="hint">比對方式：找範圍內名稱以紀錄路名開頭的道路，取每段道路所在 20 m 格在 16 小時內的最大水深。紀錄是「該區域的積水深度」，道路只是代表位置；20 m 網格與集總式下水道抓不到街道尺度的差異，請看量級與有沒有淹，不要看到公分。</div></details>
       </section>
 
-      <section class="panel" id="sec-bld">
+      <section class="panel" id="sec-bld" data-tab="stats">
         <div class="chart-head">
           <h2>建物受災統計（堤內）</h2>
           <span class="hint" id="bldWhen"></span>
@@ -422,10 +452,10 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
             <tfoot id="bFoot"></tfoot>
           </table>
         </div>
-        <div class="hint">建物來自臺北市「自動化 3D 近似建物模型」（data.taipei，經 sheethub/tpe3d 轉為 GeoJSON，約 2017 年資料），範圍內共 <span id="bldAll"></span> 棟。水深取建物所在 20 m 格的二維模擬結果；樓地板面積用「建物高度 ÷ 3.3 m」估樓層數，再乘上建物占地面積。</div>
+        <details class="how"><summary>怎麼算的</summary><div class="hint">建物來自臺北市「自動化 3D 近似建物模型」（data.taipei，經 sheethub/tpe3d 轉為 GeoJSON，約 2017 年資料），範圍內共 <span id="bldAll"></span> 棟。水深取建物所在 20 m 格的二維模擬結果；樓地板面積用「建物高度 ÷ 3.3 m」估樓層數，再乘上建物占地面積。</div></details>
       </section>
 
-      <section class="panel" id="sec-infra">
+      <section class="panel" id="sec-infra" data-tab="stats">
         <div class="chart-head">
           <h2>道路與公共設施</h2>
           <span class="hint" id="infraWhen"></span>
@@ -437,11 +467,11 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
             <tbody id="pubBody"></tbody>
           </table>
         </div>
-        <div class="hint">道路、橋樑與設施取自 OpenStreetMap（經 OSM 官方 API 下載，涵蓋整個模擬範圍，資料下載日 2026-10-19）。道路每 20 m 取一段，依所在格水深分為積水、危險、中斷三級；中斷是一般車輛無法通行的水深（≥ 0.5 m）。橋樑在 DEM 與建物資料中都沒有，3D 中的橋面高度是依兩端地面加 6 m 示意。OSM 的學校多半沒有名稱，只標「學校」。</div>
+        <details class="how"><summary>怎麼算的</summary><div class="hint">道路、橋樑與設施取自 OpenStreetMap（經 OSM 官方 API 下載，涵蓋整個模擬範圍，資料下載日 2026-10-19）。道路每 20 m 取一段，依所在格水深分為積水、危險、中斷三級；中斷是一般車輛無法通行的水深（≥ 0.5 m）。橋樑在 DEM 與建物資料中都沒有，3D 中的橋面高度是依兩端地面加 6 m 示意。OSM 的學校多半沒有名稱，只標「學校」。</div></details>
       </section>
 
 
-      <section class="panel notes" id="sec-notes">
+      <section class="panel notes" id="sec-notes" data-tab="notes">
         <h2>模型假設與限制</h2>
         <ul>
           <li><b>河道水位是示意，不是水理演算。</b>各河段節點的常水位取自 DEM 的水面高程，計畫洪水位取堤頂下 1.5 m（出水高），洪水規模以「計畫洪峰流量的百分比」在兩者之間內插（水深約與流量的 0.6 次方成正比），再加上潮位影響。計畫洪峰流量取 1,500 m³/s，只用來換算主流流速動畫。</li>
@@ -454,7 +484,7 @@ canvas#flowLayer { position: absolute; inset: 0; width: 100%; height: 100%; poin
         </ul>
       </section>
 
-      <footer class="panel notes" id="credits">
+      <footer class="panel notes" id="credits" data-tab="notes">
         <h2>資料來源與授權</h2>
         <ul>
           <li><b>地形：</b>內政部國土測繪中心 2025 年 20 m 數值高程模型（臺北市分幅），依<a href="https://data.gov.tw/license" target="_blank" rel="noopener">政府資料開放授權條款第 1 版</a>使用。</li>
@@ -683,7 +713,7 @@ function buildGateList() {
   GATES.forEach((g, i) => {
     const row = document.createElement("div");
     row.className = "gate-row"; row.id = "gr-" + g.id;
-    row.innerHTML = `<div><b>${g.name}</b><small>底檻 EL. ${fmt(g.sill, 1)} m・${g.area}</small></div><button type="button" class="switch" id="gs-${g.id}"></button>`;
+    row.innerHTML = `<div><b>${g.name}</b><small>底檻 EL. ${fmt(g.sill, 1)} m・${String(g.area).split("（")[0]}</small></div><button type="button" class="switch" id="gs-${g.id}"></button>`;
     row.querySelector("button").addEventListener("click", () => toggleGate(i));
     box.appendChild(row);
   });
@@ -2411,6 +2441,18 @@ $("play").addEventListener("click", play);
 $("play3d").addEventListener("click", play);
 $("time").addEventListener("input", e => { if (timer) stop(); tIdx = Number(e.target.value); render(); });
 
+// 分頁：右欄依 data-tab 顯示，狀態寫進網址（#tab=map），連結可直接指到某一頁
+function showTab(name) {
+  const tabs = [...document.querySelectorAll("#tabs [data-tab]")];
+  if (!tabs.some(b => b.dataset.tab === name)) name = "now";
+  tabs.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  document.querySelectorAll(".main > [data-tab]").forEach(el => el.classList.toggle("tab-on", el.dataset.tab === name));
+  history.replaceState(null, "", "#tab=" + name);
+  if (name === "map" && frames.length) { renderContour(frames[tIdx]); if (typeof update3D === "function") update3D(frames[tIdx]); }
+}
+document.querySelectorAll("#tabs [data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+$("ctlToggle").addEventListener("click", () => { const c = $("controls"), on = !c.classList.contains("open"); c.classList.toggle("open", on); $("ctlToggle").setAttribute("aria-expanded", String(on)); $("ctlToggle").textContent = on ? "收起參數 ▴" : "調整參數（洪水、雨量、排水、水門）▾"; });
+showTab((location.hash.match(/tab=([a-z]+)/) || [])[1] || "now");
 buildPresets(); buildGateList(); bindRange("rainHours", "rainHours");
 $("showInund").addEventListener("change", () => { if (frames.length) renderContour(frames[tIdx]); });
 $("inundCase").addEventListener("change", () => { if (frames.length) renderContour(frames[tIdx]); });

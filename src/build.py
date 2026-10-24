@@ -27,7 +27,7 @@ if region:
                     + ("疏散門位置取自臺北市水利處疏散門清單與 OpenStreetMap。" if not summ.get("auto_gates") else "OpenStreetMap 與臺北市水利處疏散門清單都沒有本區的疏散門，頁面上的「水門」是依道路穿越堤線處設定的假想缺口，用來比較堤防不同位置失效的後果，不是實際存在的水門。")
                     + 
                     f"堤內面積約 {summ['inland_km2']} km²；範圍邊界視為封閉。")
-    notes = f'''      <section class="panel notes" id="sec-notes">
+    notes = f'''      <section class="panel notes" id="sec-notes" data-tab="notes">
         <h2>模型假設與限制</h2>
         <ul>
           <li><b>河道水位是示意，不是水理演算。</b>各河段節點的常水位取自 DEM 的水面高程，計畫洪水位取堤頂下 1.5 m（出水高），洪水規模以「計畫洪峰流量的百分比」在兩者之間內插（水深約與流量的 0.6 次方成正比），再加上潮位影響。計畫洪峰流量取 {cfg['qDesign']:,} m³/s，只用來換算主流流速動畫。</li>
