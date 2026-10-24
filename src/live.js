@@ -41,16 +41,17 @@ function liveParse(kind, data) {
     const i = Math.floor(x / DEM.d), j = Math.floor(y / DEM.d), inside = i >= 0 && i < DEM.nx && j >= 0 && j < DEM.ny;
     const k = inside ? j * DEM.nx + i : -1, pr = th.properties || {};
     const obs = {}; (ds.Observations || []).forEach(o => { obs[o.phenomenonTime] = o.result; });
+    const series = (ds.Observations || []).map(o => [new Date(o.phenomenonTime).getTime(), o.result]).sort((a, b) => a[0] - b[0]);
     const latest = ds.Observations && ds.Observations[0] ? ds.Observations[0].phenomenonTime : null;
     if (kind === "rain") {
       const margin = 3000;  // 範圍外 3 km 內的雨量站也拿來加權
       if (x < -margin || y < -margin || x > DEM.nx * DEM.d + margin || y > DEM.ny * DEM.d + margin) return;
-      out.push({ id: pr.stationID, name: pr.stationName, town: pr.TownName, x, y, inside, obs, latest });
+      out.push({ id: pr.stationID, name: pr.stationName, town: pr.TownName, x, y, inside, obs, series, latest });
     } else {
       if (!inside || DEM.mask[k] !== 1) return;  // 只看本河段堤內的下水道水位站
       const base = /Base_Elev=([-\d.]+)/.exec(ds.description || ""), pipe = Number(pr.StationPipeDepth), manhole = Number(pr.StationManholeDepth);
       const c = DRAIN.stations.length ? DRAIN.catch[k] : 0;
-      out.push({ id: pr.stationID, name: pr.stationName, x, y, k, catch: c, base: base ? Number(base[1]) : null, pipe: pipe > 0 ? pipe : null, manhole, obs, latest });
+      out.push({ id: pr.stationID, name: pr.stationName, x, y, k, catch: c, base: base ? Number(base[1]) : null, pipe: pipe > 0 ? pipe : null, manhole, obs, series, latest });
     }
   });
   return out;
@@ -70,20 +71,29 @@ async function liveLoad() {
   } catch (e) { LIVE.err = String(e.message || e); }
   LIVE.loading = false; renderLive(); if (frames.length) renderContour(frames[tIdx]);
 }
-// 各集水區：雨量（最近 3 個雨量站反距離加權；少於 3 站就用全部）、下水道滿管比例（有效站的中位數與最大）
+// 測站在時刻 t（ISO）的觀測：取 ±5 分鐘內最近的一筆（各站回報的分鐘數不一定對齊），沒有就 undefined
+function obsAt(st, t) {
+  const ms = new Date(t).getTime(); let best, bd = 300001;
+  for (const [m, v] of st.series) { const d = Math.abs(m - ms); if (d < bd) { bd = d; best = v; } }
+  return best;
+}
+// 各集水區：雨量（最近 3 個雨量站反距離加權；缺測的站不參與該時刻的加權）、下水道滿管比例（有效站的中位數與最大）
 function liveAggregate() {
   const cs = liveCatchments();
   cs.forEach(c => {
     const near = LIVE.rain.map(g => ({ g, d: Math.hypot(g.x - c.cx, g.y - c.cy) })).sort((a, b) => a.d - b.d).slice(0, 3);
     const wsum = near.reduce((a, n) => a + 1 / Math.max(200, n.d), 0);
     c.gauges = near.map(n => ({ name: n.g.name, w: (1 / Math.max(200, n.d)) / wsum, km: n.d / 1000 }));
-    c.r10 = LIVE.times.map(t => near.reduce((a, n) => a + (n.g.obs[t] ?? 0) * (1 / Math.max(200, n.d)) / wsum, 0));  // mm／10 分鐘
-    c.missing = LIVE.times.reduce((a, t) => a + near.filter(n => n.g.obs[t] === undefined).length, 0);
+    c.r10 = LIVE.times.map(t => {  // mm／10 分鐘
+      const have = near.map(n => [obsAt(n.g, t), 1 / Math.max(200, n.d)]).filter(([v]) => v !== undefined);
+      const w = have.reduce((a, [, wi]) => a + wi, 0); return w ? have.reduce((a, [v, wi]) => a + v * wi, 0) / w : 0;
+    });
+    c.missing = LIVE.times.reduce((a, t) => a + near.filter(n => obsAt(n.g, t) === undefined).length, 0);
     c.mm1h = c.r10.slice(12).reduce((a, v) => a + v, 0); c.mm3h = c.r10.reduce((a, v) => a + v, 0); c.mm10 = c.r10[17];
     const st = LIVE.sewer.filter(s => s.catch === cs.indexOf(c));
     const fresh = t => t && (LIVE.at - new Date(t)) <= 3600000;
     st.forEach(s => {
-      const v = s.obs[LIVE.times[17]] ?? (s.latest ? s.obs[s.latest] : undefined);
+      const v = obsAt(s, LIVE.times[17]) ?? (s.latest ? s.obs[s.latest] : undefined);
       s.fill = (s.base !== null && s.pipe && v !== undefined && fresh(s.latest)) ? (v - s.base) / s.pipe : null;
       s.ok = s.fill !== null && s.fill > -0.5 && s.fill < 3;  // 高程設定有誤或離線的站剔除（例如管底高程比水位高 4 m 的）
       s.level = v;
@@ -119,7 +129,7 @@ function renderLive() {
   const pumps = $("livePumps");
   if (pumps && !pumps.children.length) pumps.innerHTML = DRAIN.stations.length ? DRAIN.stations.map((s, i) => `<label class="check"><input type="checkbox" class="livePumpOff" data-i="${i}"> ${s.n.replace("抽水站", "")} 停機</label>`).join("") : `<span class="hint">本河段沒有抽水站，排水只靠重力閘門與溪流。</span>`;
   const note = $("liveNote");
-  if (note) note.innerHTML = `雨量站是中央氣象署自動站，下水道水位站是臺北市水利處（經內政部國土管理署、民生公共物聯網 sta.colife.org.tw 發布，每 10 分鐘），座標投影到 20 m 格後依最近抽水站劃分集水區；雨量用最近三站反距離加權。「滿管比例」＝（水位 − 管底高程）／管高，1 代表水已到管頂，超過代表人孔內壅水；比例在 −50% 以下或 300% 以上視為站的高程設定或感測有誤，不納入。抽水站是否運轉沒有公開資料，請用上面的勾選當作變因；下水道收水能力、河道水位、潮位沿用左側滑桿。模擬用的是集水區面積加權的單一雨量序列，看不到各區雨量差異。`;
+  if (note) note.innerHTML = `雨量站是中央氣象署自動站，下水道水位站是臺北市水利處（經內政部國土管理署、民生公共物聯網 sta.colife.org.tw 發布，每 10 分鐘），座標投影到 20 m 格後依最近抽水站劃分集水區；雨量用最近三站反距離加權。「滿管比例」＝（水位 − 管底高程）／管高，1 代表水已到管頂，超過代表人孔內壅水；比例在 −50% 以下或 300% 以上視為站的高程設定或感測有誤，不納入。抽水站是否運轉沒有公開資料，請用上面的勾選當作變因；河道設為常水位（洪水規模可再用左側滑桿調高），下水道收水能力、抽水機可用率、潮位沿用左側滑桿。模擬用的是集水區面積加權的單一雨量序列，看不到各區雨量差異。`;
 }
 function liveRun() {
   if (!LIVE.at) { liveLoad().then(() => LIVE.at && liveRun()); return; }
@@ -131,7 +141,7 @@ function liveRun() {
   const t0 = new Date(LIVE.at.getTime() - 17 * 600000 + 8 * 3600000), pad = v => String(v).padStart(2, "0");
   const off = [...document.querySelectorAll(".livePumpOff:checked")].map(e => DRAIN.stations[Number(e.dataset.i)].n);
   P = { ...P, rainSeries: series, rainStepH: 1 / 6, simHours: 5, t0: `${t0.getUTCFullYear()}-${pad(t0.getUTCMonth() + 1)}-${pad(t0.getUTCDate())}T${pad(t0.getUTCHours())}:${pad(t0.getUTCMinutes())}`,
-        tideSync: false, closeAt: 99, pumpFail: off.map(n => ({ name: n, at: 0 })), rain: Math.round(Math.max(...series)), rainHours: 1,
+        Qpeak: REGION.qDesign ? 20 : 1500, tideSync: false, closeAt: 99, pumpFail: off.map(n => ({ name: n, at: 0 })), rain: Math.round(Math.max(...series)), rainHours: 1,
         live: { nowIdx: 17 * 2, future: mode, off } };  // 現在＝第 17 個 10 分鐘＝第 34 個 5 分鐘影格
   delete P.tp; delete P.qBase; delete P.tideT;
   tIdx = P.live.nowIdx; activePreset = null; syncControls(); recompute();
@@ -147,9 +157,9 @@ function drawLiveOnMap(g) {
     g.fillRect(x - 5, y - 5, 10, 10); g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.strokeRect(x - 5, y - 5, 10, 10);
   });
   LIVE.rain.filter(r => r.inside).forEach(r => {
-    const x = r.x * sc, y = H - r.y * sc, mm = LIVE.times.slice(12).reduce((a, t) => a + (r.obs[t] ?? 0), 0);
+    const x = r.x * sc, y = H - r.y * sc, mm = LIVE.times.slice(12).reduce((a, t) => a + (obsAt(r, t) ?? 0), 0);
     g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fillStyle = mm >= 40 ? "#c0392b" : mm > 0 ? "#1e8449" : "#5d6d7e"; g.fill(); g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.stroke();
-    tag(g, x + 9, y + 4, `${r.name} ${mm.toFixed(0)} mm/h`, "left");
+    tag(g, x + 9, y + 4, `${r.name} 1 h ${mm.toFixed(0)} mm`, "left");
   });
 }
 function liveHover(k) {
